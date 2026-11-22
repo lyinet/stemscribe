@@ -6,12 +6,12 @@ StemScribe cross-layer verification & contract test suite.
 import json
 import py_compile
 import re
+import struct
 import subprocess
 import sys
 import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -102,8 +102,10 @@ def check_icons() -> None:
     for rel, dims in expected.items():
         p = ROOT / rel
         assert p.exists(), f"Missing icon: {rel}"
-        with Image.open(p) as im:
-            assert im.size == dims, f"Icon {rel} size {im.size} != {dims}"
+        head = p.read_bytes()[:24]
+        assert head[:8] == b"\x89PNG\r\n\x1a\n" and head[12:16] == b"IHDR", f"Invalid PNG: {rel}"
+        size = struct.unpack(">II", head[16:24])
+        assert size == dims, f"Icon {rel} size {size} != {dims}"
     icns_path = ROOT / "src-tauri/icons/icon.icns"
     assert icns_path.exists() and icns_path.read_bytes()[:4] == b"icns", "Invalid or missing icon.icns"
     print(f"[PASS] macOS Bundle Icons: 4 PNG assets + Retina icon.icns verified")
