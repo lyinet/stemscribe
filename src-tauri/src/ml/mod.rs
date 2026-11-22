@@ -43,18 +43,25 @@ pub fn check_model_status() -> Result<ModelStatus> {
 }
 
 pub fn build_coreml_session(model_path: &PathBuf) -> Result<Session> {
+    build_session(model_path, true)
+}
+
+pub fn build_cpu_session(model_path: &PathBuf) -> Result<Session> {
+    build_session(model_path, false)
+}
+
+fn build_session(model_path: &PathBuf, use_coreml: bool) -> Result<Session> {
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 8);
     let mut builder = Session::builder()?
         .with_optimization_level(GraphOptimizationLevel::Level3)?
-        .with_intra_threads(4)?;
+        .with_intra_threads(threads)?;
 
     #[cfg(target_os = "macos")]
-    {
-        builder = builder.with_execution_providers([
-            CoreMLExecutionProvider::default()
-                .with_subgraphs(true)
-                .build(),
-        ])?;
+    if use_coreml {
+        builder = builder.with_execution_providers([CoreMLExecutionProvider::default().with_subgraphs(true).build()])?;
     }
+    #[cfg(not(target_os = "macos"))]
+    let _ = use_coreml;
 
     let session = builder
         .commit_from_file(model_path)

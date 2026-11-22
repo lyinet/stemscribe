@@ -1,4 +1,4 @@
-use crate::audio::decode_audio_file;
+use crate::audio::load_analysis_audio;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -15,10 +15,8 @@ pub struct SongStructureSegment {
 /// Detect song structure segments (Intro / Verse / Chorus / Bridge / Outro)
 /// using RMS energy contour and half-wave rectified spectral-flux novelty.
 pub fn detect_song_structure(file_path: &str) -> Result<Vec<SongStructureSegment>> {
-    let decoded = decode_audio_file(file_path)?;
-    let mono = decoded.to_mono();
-    let duration = decoded.duration_sec();
-    Ok(segment_from_mono(&mono, decoded.sample_rate, duration))
+    let audio = load_analysis_audio(file_path)?;
+    Ok(segment_from_mono(&audio.mono, audio.sample_rate, audio.duration_sec()))
 }
 
 pub fn segment_from_mono(

@@ -12,6 +12,7 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::path::Path;
+use std::sync::{Arc, Mutex, OnceLock};
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::errors::Error as SymphoniaError;
@@ -85,8 +86,11 @@ impl DecodedAudio {
     }
 }
 
-pub fn decode_audio_file(path: &str) -> Result<DecodedAudio> {
-    let file = File::open(path).with_context(|| format!("Failed to open audio file: {path}"))?;
+/// Streams every decoded block (interleaved f32) to `on_block`, using the
+/// channel count and sample rate reported by the decoder itself rather than
+/// container metadata, which is wrong for some AAC/HE-AAC files.
+fn decode_stream(path: &str, mut on_block: impl FnMut(&[f32], usize, u32)) -> Result<(u32, usize)> {
+    let file = File::open(path).with_context(|| format!("无法打开音频文件: {path}"))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
 
     let mut hint = Hint::new();
@@ -95,35 +99,25 @@ pub fn decode_audio_file(path: &str) -> Result<DecodedAudio> {
     }
 
     let probed = symphonia::default::get_probe()
-        .format(
-            &hint,
-            mss,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
-        )
-        .map_err(|e| anyhow!("Unsupported audio container: {e}"))?;
+        .format(&hint, mss, &FormatOptions { enable_gapless: true, ..Default::default() }, &MetadataOptions::default())
+        .map_err(|e| anyhow!("不支持的音频格式（{e}）"))?;
 
     let mut format = probed.format;
     let track = format
-        .default_track()
-        .ok_or_else(|| anyhow!("No default audio track found"))?;
-
-    let sample_rate = track
-        .codec_params
-        .sample_rate
-        .ok_or_else(|| anyhow!("Missing sample rate metadata"))?;
-    let channels = track
-        .codec_params
-        .channels
-        .map(|c| c.count())
-        .unwrap_or(2);
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+        .ok_or_else(|| anyhow!("文件中没有可解码的音轨"))?;
     let track_id = track.id;
+    let mut sample_rate = track.codec_params.sample_rate.unwrap_or(0);
+    let mut channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(0);
 
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
-        .map_err(|e| anyhow!("Failed to initialize decoder: {e}"))?;
+        .map_err(|e| anyhow!("无法初始化解码器（{e}）"))?;
 
-    let mut samples: Vec<f32> = Vec::new();
+    let mut sample_buf: Option<SampleBuffer<f32>> = None;
+    let mut got_audio = false;
 
     loop {
         let packet = match format.next_packet() {
@@ -133,30 +127,133 @@ pub fn decode_audio_file(path: &str) -> Result<DecodedAudio> {
                 decoder.reset();
                 continue;
             }
-            Err(e) => return Err(anyhow!("Audio packet read error: {e}")),
+            // Trailing junk / truncated files: keep what was decoded so far.
+            Err(_) if got_audio => break,
+            Err(e) => return Err(anyhow!("读取音频数据失败（{e}）")),
         };
-
         if packet.track_id() != track_id {
             continue;
         }
-
         match decoder.decode(&packet) {
             Ok(decoded) => {
                 let spec = *decoded.spec();
-                let mut sample_buf = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
-                sample_buf.copy_interleaved_ref(decoded);
-                samples.extend_from_slice(sample_buf.samples());
+                if spec.channels.count() == 0 || decoded.frames() == 0 {
+                    continue;
+                }
+                sample_rate = spec.rate;
+                channels = spec.channels.count();
+                let needs_new = sample_buf
+                    .as_ref()
+                    .map(|b| b.capacity() < decoded.capacity() * channels)
+                    .unwrap_or(true);
+                if needs_new {
+                    sample_buf = Some(SampleBuffer::<f32>::new(decoded.capacity() as u64, spec));
+                }
+                let buf = sample_buf.as_mut().expect("sample buffer initialised above");
+                buf.copy_interleaved_ref(decoded);
+                on_block(buf.samples(), channels, sample_rate);
+                got_audio = true;
             }
             Err(SymphoniaError::DecodeError(_)) => continue,
-            Err(e) => return Err(anyhow!("Audio decode error: {e}")),
+            Err(_) if got_audio => break,
+            Err(e) => return Err(anyhow!("音频解码失败（{e}）")),
         }
     }
 
-    Ok(DecodedAudio {
-        sample_rate,
-        channels,
-        samples,
-    })
+    if !got_audio || sample_rate == 0 || channels == 0 {
+        return Err(anyhow!("没有解码出任何音频数据，文件可能已损坏或不包含音轨"));
+    }
+    Ok((sample_rate, channels))
+}
+
+pub fn decode_audio_file(path: &str) -> Result<DecodedAudio> {
+    let mut samples: Vec<f32> = Vec::new();
+    let (sample_rate, channels) = decode_stream(path, |block, _, _| samples.extend_from_slice(block))?;
+    Ok(DecodedAudio { sample_rate, channels, samples })
+}
+
+/// Mono, down-sampled audio shared by every analysis step of one file.
+pub struct AnalysisAudio {
+    pub mono: Vec<f32>,
+    pub sample_rate: u32,
+    pub source_sample_rate: u32,
+    pub source_channels: usize,
+}
+
+impl AnalysisAudio {
+    pub fn duration_sec(&self) -> f64 {
+        self.mono.len() as f64 / self.sample_rate.max(1) as f64
+    }
+}
+
+pub const ANALYSIS_SAMPLE_RATE: u32 = 22_050;
+/// Longest audio accepted for import (2 hours).
+pub const MAX_IMPORT_SEC: f64 = 2.0 * 3600.0;
+
+type AnalysisCacheEntry = (String, u64, Option<std::time::SystemTime>, Arc<AnalysisAudio>);
+
+fn analysis_cache() -> &'static Mutex<Vec<AnalysisCacheEntry>> {
+    static CACHE: OnceLock<Mutex<Vec<AnalysisCacheEntry>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Decodes `path` once into mono audio at [`ANALYSIS_SAMPLE_RATE`] and caches
+/// it, so the parallel import analyses (waveform, tempo, key, structure,
+/// chords) share one decode instead of each holding a full-rate copy.
+pub fn load_analysis_audio(path: &str) -> Result<Arc<AnalysisAudio>> {
+    let meta = std::fs::metadata(path).with_context(|| format!("找不到音频文件: {path}"))?;
+    let (len, mtime) = (meta.len(), meta.modified().ok());
+
+    // Holding the lock while decoding makes concurrent callers wait and then
+    // reuse the result rather than decoding the same file in parallel.
+    let mut cache = analysis_cache().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, _, _, audio)) = cache.iter().find(|(p, l, m, _)| p == path && *l == len && *m == mtime) {
+        return Ok(audio.clone());
+    }
+
+    let mut mono: Vec<f32> = Vec::new();
+    let mut acc = 0.0f32;
+    let mut acc_n = 0u32;
+    let mut phase = 0.0f64;
+    let mut step = 1.0f64;
+    let mut too_long = false;
+    let max_frames_hint = (MAX_IMPORT_SEC * ANALYSIS_SAMPLE_RATE as f64) as usize;
+
+    let (source_sample_rate, source_channels) = decode_stream(path, |block, ch, sr| {
+        if too_long {
+            return;
+        }
+        step = (ANALYSIS_SAMPLE_RATE.min(sr) as f64) / sr as f64;
+        let inv = 1.0 / ch as f32;
+        for frame in block.chunks_exact(ch) {
+            acc += frame.iter().sum::<f32>() * inv;
+            acc_n += 1;
+            phase += step;
+            if phase >= 1.0 {
+                phase -= 1.0;
+                mono.push(acc / acc_n as f32);
+                acc = 0.0;
+                acc_n = 0;
+            }
+        }
+        if mono.len() > max_frames_hint {
+            too_long = true;
+        }
+    })?;
+    if too_long {
+        return Err(anyhow!("音频超过 {} 分钟，暂不支持导入这么长的文件", (MAX_IMPORT_SEC / 60.0) as u32));
+    }
+
+    let audio = Arc::new(AnalysisAudio {
+        mono,
+        sample_rate: ANALYSIS_SAMPLE_RATE.min(source_sample_rate),
+        source_sample_rate,
+        source_channels,
+    });
+    cache.retain(|(p, ..)| p != path);
+    cache.insert(0, (path.to_string(), len, mtime, audio.clone()));
+    cache.truncate(3);
+    Ok(audio)
 }
 
 pub fn extract_waveform_peaks(mono: &[f32], num_bins: usize) -> Vec<f32> {
@@ -181,9 +278,8 @@ pub fn extract_waveform_peaks(mono: &[f32], num_bins: usize) -> Vec<f32> {
 }
 
 pub fn inspect_audio(path: &str) -> Result<AudioMetadata> {
-    let decoded = decode_audio_file(path)?;
-    let mono = decoded.to_mono();
-    let peaks = extract_waveform_peaks(&mono, 480);
+    let audio = load_analysis_audio(path)?;
+    let peaks = extract_waveform_peaks(&audio.mono, 480);
     let file_name = Path::new(path)
         .file_name()
         .and_then(|s| s.to_str())
@@ -193,9 +289,9 @@ pub fn inspect_audio(path: &str) -> Result<AudioMetadata> {
     Ok(AudioMetadata {
         file_path: path.to_string(),
         file_name,
-        sample_rate: decoded.sample_rate,
-        channels: decoded.channels,
-        duration_sec: decoded.duration_sec(),
+        sample_rate: audio.source_sample_rate,
+        channels: audio.source_channels,
+        duration_sec: audio.duration_sec(),
         waveform_peaks: peaks,
     })
 }

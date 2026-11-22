@@ -1,5 +1,5 @@
 use crate::audio::chords::compute_chroma_goertzel;
-use crate::audio::decode_audio_file;
+use crate::audio::load_analysis_audio;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -30,9 +30,9 @@ const MINOR_INTERVALS: [u8; 7] = [0, 2, 3, 5, 7, 8, 10];
 
 /// Estimate overall musical key & scale on-device in Rust using Krumhansl-Schmuckler correlation.
 pub fn detect_key(file_path: &str) -> Result<KeyEstimate> {
-    let decoded = decode_audio_file(file_path)?;
-    let mono = decoded.to_mono();
-    let sr = decoded.sample_rate.max(1) as f32;
+    let audio = load_analysis_audio(file_path)?;
+    let mono = &audio.mono;
+    let sr = audio.sample_rate.max(1) as f32;
 
     // Sample up to the first 60 seconds in 2-second chunks for fast key estimation
     let max_samples = ((sr * 60.0) as usize).min(mono.len());

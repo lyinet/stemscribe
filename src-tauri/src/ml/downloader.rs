@@ -28,6 +28,38 @@ pub struct DownloadProgressEvent {
     pub status: String,
 }
 
+const BASIC_PITCH_URL: &str =
+    "https://github.com/spotify/basic-pitch/raw/main/basic_pitch/saved_models/icassp_2022/nmp.onnx";
+const HTDEMUCS_URL: &str = "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/main/htdemucs_fp16weights.onnx";
+
+fn default_url(model_id: &str) -> &'static str {
+    match model_id {
+        "basic_pitch" => BASIC_PITCH_URL,
+        "htdemucs" => HTDEMUCS_URL,
+        _ => "",
+    }
+}
+
+/// Rejects files that are clearly not ONNX models (HTML error pages, auth
+/// failures, truncated downloads). An ONNX ModelProto always starts with
+/// field 1 (`ir_version`, varint) => first byte 0x08.
+pub fn validate_onnx_file(path: &Path) -> Result<()> {
+    use std::io::Read;
+    let len = std::fs::metadata(path)?.len();
+    let mut head = [0u8; 1];
+    std::fs::File::open(path)?.read_exact(&mut head).ok();
+    if len < 64 * 1024 || head[0] != 0x08 {
+        let preview = std::fs::read(path)
+            .map(|b| String::from_utf8_lossy(&b[..b.len().min(80)]).trim().to_string())
+            .unwrap_or_default();
+        return Err(anyhow!(
+            "下载/导入的文件不是有效的 ONNX 模型（{len} 字节{}），请更换下载地址或检查网络代理",
+            if preview.is_empty() { String::new() } else { format!("，内容: {preview}") }
+        ));
+    }
+    Ok(())
+}
+
 fn resolve_model_filename(model_id: &str) -> Result<&'static str> {
     match model_id {
         "basic_pitch" => Ok("basic_pitch.onnx"),
@@ -43,17 +75,17 @@ pub fn list_models() -> Result<Vec<ModelItemInfo>> {
             "basic_pitch",
             "Basic Pitch (音频转 MIDI)",
             "basic_pitch.onnx",
-            "https://huggingface.co/spaces/spotify/basic-pitch/resolve/main/basic_pitch/saved_models/icassp_2022/nmp.onnx",
-            "支持一键在线下载官方 Spotify ONNX 模型，或替换为国内 HF 镜像 / 离线导入。",
+            BASIC_PITCH_URL,
+            "Spotify 官方 Basic Pitch 模型（约 230 KB），可一键下载或离线导入。",
             true,
         ),
         (
             "htdemucs",
             "HTDemucs 4-Stem (人声/鼓/贝斯/伴奏)",
             "htdemucs.onnx",
-            "",
-            "请运行 scripts/export_models_onnx.py 本地导出后点击「从本地导入 .onnx」，或填入自建镜像 URL；未安装时自动使用内置 4 轨 DSP 引擎。",
-            false,
+            HTDEMUCS_URL,
+            "Meta HTDemucs 4 轨分离模型 ONNX 版（约 166 MB），可一键下载，也可填入镜像地址或离线导入。",
+            true,
         ),
     ];
 
@@ -82,19 +114,20 @@ pub async fn download_model_with_progress(
 ) -> Result<String> {
     let file_name = resolve_model_filename(model_id)?;
 
-    if custom_url.trim().is_empty() {
-        return Err(anyhow!("请先填写可用的 .onnx 下载地址，或直接点击「从本地导入 .onnx」"));
-    }
+    let url = match custom_url.trim() {
+        "" => default_url(model_id),
+        u => u,
+    };
 
     let dest: PathBuf = models_dir()?.join(file_name);
     let tmp_dest: PathBuf = models_dir()?.join(format!("{file_name}.part"));
 
     let client = Client::new();
     let resp = client
-        .get(custom_url.trim())
+        .get(url)
         .send()
         .await
-        .with_context(|| format!("无法连接到模型下载地址: {custom_url}"))?;
+        .with_context(|| format!("无法连接到模型下载地址: {url}"))?;
 
     if !resp.status().is_success() {
         return Err(anyhow!("模型下载失败，HTTP 状态码: {}", resp.status()));
@@ -129,6 +162,10 @@ pub async fn download_model_with_progress(
 
     file.flush().await?;
     drop(file);
+    if let Err(e) = validate_onnx_file(&tmp_dest) {
+        let _ = tokio::fs::remove_file(&tmp_dest).await;
+        return Err(e);
+    }
     tokio::fs::rename(&tmp_dest, &dest).await?;
 
     let _ = app.emit(
@@ -160,10 +197,7 @@ pub fn import_local_model(model_id: &str, source_path: &str) -> Result<String> {
     if ext != "onnx" {
         return Err(anyhow!("仅支持导入 .onnx 格式的模型文件（当前文件: {source_path}）"));
     }
-    let meta = std::fs::metadata(src)?;
-    if meta.len() == 0 {
-        return Err(anyhow!("所选 .onnx 模型文件为空，请检查导出是否完整"));
-    }
+    validate_onnx_file(src)?;
 
     let dest: PathBuf = models_dir()?.join(file_name);
     if src.canonicalize().ok() != dest.canonicalize().ok() {
@@ -195,5 +229,10 @@ mod tests {
         std::fs::write(&tmp_txt, b"hello").unwrap();
         assert!(import_local_model("basic_pitch", tmp_txt.to_str().unwrap()).is_err());
         let _ = std::fs::remove_file(tmp_txt);
+
+        let fake = std::env::temp_dir().join("stemscribe_fake_model.onnx");
+        std::fs::write(&fake, b"Invalid username or password.").unwrap();
+        assert!(validate_onnx_file(&fake).is_err());
+        let _ = std::fs::remove_file(fake);
     }
 }

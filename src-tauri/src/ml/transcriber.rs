@@ -1,6 +1,6 @@
 use crate::audio::chords::ChordEvent;
 use crate::audio::{decode_audio_file, resample_linear};
-use crate::ml::{basic_pitch_model_path, build_coreml_session};
+use crate::ml::{basic_pitch_model_path, build_coreml_session, build_cpu_session};
 use anyhow::{anyhow, Result};
 use midly::num::{u15, u24, u28, u4, u7};
 use midly::{Format, Header, MetaMessage, MidiMessage, Smf, Timing, Track, TrackEvent, TrackEventKind};
@@ -11,7 +11,9 @@ use std::path::Path;
 
 const BASIC_PITCH_SR: u32 = 22_050;
 const WINDOW_SAMPLES: usize = 43_844;
-const HOP_SAMPLES: usize = 43_844 - 7_680;
+const OVERLAP_SAMPLES: usize = 7_680;
+const OVERLAP_FRAMES: usize = 30;
+const HOP_SAMPLES: usize = WINDOW_SAMPLES - OVERLAP_SAMPLES;
 const NUM_PITCHES: usize = 88;
 const MIDI_OFFSET: u8 = 21;
 const FRAMES_PER_SECOND: f64 = 22_050.0 / 256.0;
@@ -42,46 +44,74 @@ pub fn run_transcription(stem_path: &str, stem_name: &str) -> Result<Transcripti
 
     let decoded = decode_audio_file(stem_path)?;
     let mono = resample_linear(&decoded.to_mono(), decoded.sample_rate, BASIC_PITCH_SR);
-    let mut session = build_coreml_session(&model_path)?;
+    if mono.is_empty() {
+        return Err(anyhow!("音轨为空，无法转谱"));
+    }
+    let mut session = build_coreml_session(&model_path).or_else(|_| build_cpu_session(&model_path))?;
+    let mut on_cpu = false;
 
-    let mut all_notes: Vec<MidiNote> = Vec::new();
+    // Same windowing as the reference implementation: pad half an overlap at
+    // the start, run fixed windows, then drop half an overlap of frames from
+    // each side so neighbouring windows do not produce duplicate notes.
+    let half_pad = OVERLAP_SAMPLES / 2;
+    let mut padded = vec![0.0f32; half_pad];
+    padded.extend_from_slice(&mono);
+    let trim = OVERLAP_FRAMES / 2;
+    let expected_frames = ((mono.len() as f64) * FRAMES_PER_SECOND / BASIC_PITCH_SR as f64).ceil() as usize;
+
+    let mut note_post: Vec<f32> = Vec::with_capacity(expected_frames * NUM_PITCHES);
+    let mut onset_post: Vec<f32> = Vec::with_capacity(expected_frames * NUM_PITCHES);
     let mut offset = 0usize;
 
-    while offset < mono.len() {
-        let valid_len = (mono.len() - offset).min(WINDOW_SAMPLES);
+    while offset < padded.len() {
+        let valid_len = (padded.len() - offset).min(WINDOW_SAMPLES);
         let mut input = Array3::<f32>::zeros((1, WINDOW_SAMPLES, 1));
         for i in 0..valid_len {
-            input[[0, i, 0]] = mono[offset + i];
+            input[[0, i, 0]] = padded[offset + i];
         }
 
-        let input_tensor = Tensor::from_array(input)?;
-        let outputs = session.run(ort::inputs![input_tensor])?;
+        let run_window = |session: &mut ort::session::Session| -> Result<(usize, Vec<f32>, Vec<f32>)> {
+            let outputs = session.run(ort::inputs![Tensor::from_array(input.clone())?])?;
+            let pick = |names: &[&str]| -> Result<(usize, Vec<f32>)> {
+                for name in names {
+                    if let Some(value) = outputs.get(*name) {
+                        let (shape, data) = value.try_extract_tensor::<f32>()?;
+                        if shape.len() == 3 && shape[2] as usize == NUM_PITCHES {
+                            return Ok((shape[1] as usize, data.to_vec()));
+                        }
+                    }
+                }
+                Err(anyhow!("转谱模型输出与 Basic Pitch 不一致（缺少 {}），请重新下载官方 nmp.onnx", names[0]))
+            };
+            let (frames, note) = pick(&["StatefulPartitionedCall:1", "note"])?;
+            let (_, onset) = pick(&["StatefulPartitionedCall:2", "onset"])?;
+            Ok((frames, note, onset))
+        };
+        let (frames, note, onset) = match run_window(&mut session) {
+            Ok(r) => r,
+            Err(_) if !on_cpu => {
+                session = build_cpu_session(&model_path)?;
+                on_cpu = true;
+                run_window(&mut session)?
+            }
+            Err(e) => return Err(e),
+        };
 
-        let (note_shape, note_probs) = outputs["note"]
-            .try_extract_tensor::<f32>()
-            .or_else(|_| outputs[1].try_extract_tensor::<f32>())?;
-        let (_, onset_probs) = outputs["onset"]
-            .try_extract_tensor::<f32>()
-            .or_else(|_| outputs[2].try_extract_tensor::<f32>())?;
+        let start = trim;
+        let end = frames.saturating_sub(trim).max(start);
+        note_post.extend_from_slice(&note[start * NUM_PITCHES..end * NUM_PITCHES]);
+        onset_post.extend_from_slice(&onset[start * NUM_PITCHES..end * NUM_PITCHES]);
 
-        let num_frames = note_shape[1] as usize;
-        let time_offset_sec = offset as f64 / BASIC_PITCH_SR as f64;
-        let chunk_notes = decode_notes_from_posterior(
-            note_probs,
-            onset_probs,
-            num_frames,
-            time_offset_sec,
-            0.50,
-            0.30,
-            0.06,
-        );
-        all_notes.extend(chunk_notes);
-
-        if offset + WINDOW_SAMPLES >= mono.len() {
+        if offset + WINDOW_SAMPLES >= padded.len() {
             break;
         }
         offset += HOP_SAMPLES;
     }
+
+    let total_frames = (note_post.len() / NUM_PITCHES).min(expected_frames.max(1));
+    note_post.truncate(total_frames * NUM_PITCHES);
+    onset_post.truncate(total_frames * NUM_PITCHES);
+    let mut all_notes = decode_notes_from_posterior(&note_post, &onset_post, total_frames, 0.0, 0.50, 0.30, 0.06);
 
     all_notes.sort_by(|a, b| a.start_sec.total_cmp(&b.start_sec));
     let estimated_bpm = estimate_bpm_from_onsets(&all_notes);

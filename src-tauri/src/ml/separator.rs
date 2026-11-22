@@ -1,5 +1,5 @@
 use crate::audio::{decode_audio_file, extract_waveform_peaks, resample_linear, write_stereo_wav};
-use crate::ml::{build_coreml_session, demucs_model_path};
+use crate::ml::{build_cpu_session, demucs_model_path};
 use anyhow::{anyhow, Result};
 use ndarray::Array3;
 use ort::value::Tensor;
@@ -39,7 +39,7 @@ pub fn run_separation(file_path: &str, output_dir: Option<String>) -> Result<Vec
     let model_path = demucs_model_path()?;
     if !model_path.exists() {
         return Err(anyhow!(
-            "未检测到分轨模型 htdemucs.onnx。请先运行 scripts/export_models_onnx.py 并将模型放入 {}",
+            "未安装 AI 分轨模型（htdemucs.onnx）。请在 设置 → 本地模型 中一键下载（约 166 MB），或手动放入 {}",
             model_path.display()
         ));
     }
@@ -50,7 +50,9 @@ pub fn run_separation(file_path: &str, output_dir: Option<String>) -> Result<Vec
     let right = resample_linear(&right_raw, decoded.sample_rate, TARGET_SR);
     let total_len = left.len().min(right.len());
 
-    let mut session = build_coreml_session(&model_path)?;
+    // CoreML runs HTDemucs ~4x slower than CPU and its fp16 path yields NaN
+    // (silent stems), so separation always uses the CPU provider.
+    let mut session = build_cpu_session(&model_path)?;
 
     // Output accumulators: 4 stems x 2 channels x total_len
     let mut stem_left = vec![vec![0.0f32; total_len]; 4];
@@ -68,9 +70,14 @@ pub fn run_separation(file_path: &str, output_dir: Option<String>) -> Result<Vec
             input[[0, 1, i]] = right[offset + i];
         }
 
-        let input_tensor = Tensor::from_array(input)?;
-        let outputs = session.run(ort::inputs![input_tensor])?;
-        let (_, output_data) = outputs[0].try_extract_tensor::<f32>()?;
+        let outputs = session.run(ort::inputs![Tensor::from_array(input)?])?;
+        let (shape, output_data) = outputs[0].try_extract_tensor::<f32>()?;
+        if shape.len() != 4 || shape[1] != 4 || shape[2] != 2 || shape[3] as usize != CHUNK_SAMPLES {
+            return Err(anyhow!("分轨模型输出形状不符合 HTDemucs 4 轨格式: {shape:?}"));
+        }
+        if output_data.iter().any(|v| !v.is_finite()) {
+            return Err(anyhow!("分轨模型输出了无效数值（NaN），模型文件可能已损坏，请在 设置 → 本地模型 中重新下载"));
+        }
 
         // Flat index for [1, 4, 2, CHUNK_SAMPLES]
         for i in 0..valid_len {

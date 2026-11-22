@@ -1,4 +1,4 @@
-use crate::audio::decode_audio_file;
+use crate::audio::load_analysis_audio;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -23,9 +23,9 @@ pub struct DrumHit {
 /// - Band-pass (180Hz - 2.5kHz): Snare (GM MIDI 38)
 /// - High-pass (> ~4.5kHz): Closed Hi-Hat (GM MIDI 42)
 pub fn detect_drum_hits(drum_stem_path: &str) -> Result<Vec<DrumHit>> {
-    let decoded = decode_audio_file(drum_stem_path)?;
-    let mono = decoded.to_mono();
-    let sr = decoded.sample_rate.max(1) as f32;
+    let audio = load_analysis_audio(drum_stem_path)?;
+    let mono = &audio.mono;
+    let sr = audio.sample_rate.max(1) as f32;
 
     let hop = ((sr * 0.02) as usize).max(256); // 20ms frame hop
     let mut lp_state = 0.0f32;

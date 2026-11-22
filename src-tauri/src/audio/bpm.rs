@@ -1,4 +1,4 @@
-use crate::audio::decode_audio_file;
+use crate::audio::load_analysis_audio;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -13,10 +13,8 @@ pub struct TempoAndLoudness {
 /// On-device Rust DSP tempo (onset-envelope autocorrelation, 60-180 BPM)
 /// and loudness (Peak / RMS dBFS) analyzer.
 pub fn analyze_tempo_and_loudness(file_path: &str) -> Result<TempoAndLoudness> {
-    let decoded = decode_audio_file(file_path)?;
-    let mono = decoded.to_mono();
-    let sr = decoded.sample_rate.max(1) as f32;
-    Ok(compute_tempo_and_loudness(&mono, sr))
+    let audio = load_analysis_audio(file_path)?;
+    Ok(compute_tempo_and_loudness(&audio.mono, audio.sample_rate.max(1) as f32))
 }
 
 pub fn compute_tempo_and_loudness(mono: &[f32], sr: f32) -> TempoAndLoudness {

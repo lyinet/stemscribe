@@ -1,4 +1,4 @@
-use crate::audio::decode_audio_file;
+use crate::audio::load_analysis_audio;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
@@ -16,9 +16,9 @@ const PITCH_CLASSES: [&str; 12] = [
 ];
 
 pub fn detect_chords(file_path: &str, window_sec: f64) -> Result<Vec<ChordEvent>> {
-    let decoded = decode_audio_file(file_path)?;
-    let mono = decoded.to_mono();
-    let sr = decoded.sample_rate.max(1) as f32;
+    let audio = load_analysis_audio(file_path)?;
+    let mono = &audio.mono;
+    let sr = audio.sample_rate.max(1) as f32;
     let win_len = ((window_sec.max(0.5) * sr as f64) as usize).max(2048);
 
     let mut raw_events: Vec<ChordEvent> = Vec::new();
