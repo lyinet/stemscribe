@@ -188,20 +188,27 @@ export const Arrangement: React.FC<Props> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [viewportW, setViewportW] = useState(900);
+  const [viewportH, setViewportH] = useState(0);
   const [zoomIdx, setZoomIdx] = useState(0);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setViewportW(el.clientWidth));
+    const ro = new ResizeObserver(() => {
+      setViewportW(el.clientWidth);
+      setViewportH(el.clientHeight);
+    });
     ro.observe(el);
     setViewportW(el.clientWidth);
+    setViewportH(el.clientHeight);
     return () => ro.disconnect();
   }, []);
 
   const notesEnd = notes.reduce((m, n) => Math.max(m, n.end_sec), 0);
   const total = Math.max(durationSec, notesEnd, 1);
   const hasContent = tracks.length > 0 || notes.length > 0;
+  const usedH = 28 + 26 + 26 + 24 + tracks.length * 64 + (notes.length > 0 ? 64 : 0);
+  const dropH = viewportH - usedH;
   const laneW = Math.max(240, (viewportW - HEADER_W - 2) * ZOOM_LEVELS[zoomIdx]);
   const pxPerSec = laneW / total;
   const x = (t: number) => Math.max(0, Math.min(laneW, t * pxPerSec));
@@ -482,23 +489,21 @@ export const Arrangement: React.FC<Props> = ({
                     />
                     {t.isOriginal ? (
                       <button
-                        className="track-action"
+                        className={`track-action ${separating ? "busy" : ""}`}
                         disabled={separating}
                         onClick={onSeparate}
                         title="用 AI 分离成 人声 / 鼓 / 贝斯 / 其他 4 轨"
                       >
-                        {separating ? <Loader2 size={11} className="spin" /> : <Layers size={11} />}
-                        {separating ? "分轨中" : "AI 分轨"}
+                        {separating ? <Loader2 size={12} className="spin" /> : <Layers size={12} />}
                       </button>
                     ) : (
                       <button
-                        className="track-action"
+                        className={`track-action ${transcribingStem === t.id ? "busy" : ""}`}
                         disabled={transcribingStem !== null}
                         onClick={() => onTranscribeTrack(t.id)}
                         title="把这一轨扒成 MIDI 音符"
                       >
-                        {transcribingStem === t.id ? <Loader2 size={11} className="spin" /> : <Music2 size={11} />}
-                        {transcribingStem === t.id ? "扒谱中" : "转 MIDI"}
+                        {transcribingStem === t.id ? <Loader2 size={12} className="spin" /> : <Music2 size={12} />}
                       </button>
                     )}
                   </div>
@@ -509,7 +514,7 @@ export const Arrangement: React.FC<Props> = ({
                     style={{ width: x(durationSec), ["--track-color" as string]: t.color }}
                     onClick={(e) => onSeek(timeFromEvent(e, e.currentTarget))}
                   >
-                    <span className="clip-label">{t.name}</span>
+                    <div className="clip-header">{t.name}</div>
                     <WaveformClipCanvas peaks={t.peaks} color={t.color} width={x(durationSec)} />
                   </div>
                 </div>
@@ -528,7 +533,7 @@ export const Arrangement: React.FC<Props> = ({
                 </div>
                 <div className="track-controls">
                   <button className="track-action" onClick={onOpenMidiEditor} title="在下方编辑器中打开">
-                    <Pencil size={11} /> 编辑音符
+                    <Pencil size={12} />
                   </button>
                 </div>
               </div>
@@ -540,7 +545,7 @@ export const Arrangement: React.FC<Props> = ({
                   onDoubleClick={onOpenMidiEditor}
                   title="双击打开钢琴卷帘编辑"
                 >
-                  <span className="clip-label">MIDI · {midiLabel || "旋律"}</span>
+                  <div className="clip-header">MIDI · {midiLabel || "旋律"}</div>
                   <MidiClipCanvas notes={notes} pxPerSec={pxPerSec} width={x(notesEnd) + 4} />
                 </div>
               </div>
@@ -557,6 +562,11 @@ export const Arrangement: React.FC<Props> = ({
           )}
         </div>
         {!hasContent && <div className="arr-empty">{emptyState}</div>}
+        {hasContent && dropH >= 48 && (
+          <div className="arr-drop" style={{ height: dropH }}>
+            <div className="arr-drop-box">拖入音频文件</div>
+          </div>
+        )}
       </div>
     </div>
   );

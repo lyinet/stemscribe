@@ -143,9 +143,9 @@ export const CoverStudioView: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header">
-        <div className="card-title">
-          <Mic size={16} color="#f43f5e" />
-          <span>伴奏叠录棚 · 翻唱 / 独奏多 Take 录制 & 成品合轨导出</span>
+        <div className="card-title" title="翻唱 / 独奏多 Take 录制与成品合轨导出">
+          <Mic size={14} color="#f43f5e" />
+          <span>翻唱录音</span>
           {countdown > 0 && (
             <span className="badge" style={{ color: "#fbbf24", borderColor: "#f59e0b", fontWeight: 700 }}>
               准备开录：{countdown} ...

@@ -80,7 +80,7 @@ export const TransportBar: React.FC<Props> = ({
 
   return (
     <div className="transport">
-      <div className="transport-group">
+      <div className="tp-pill">
         <button className="tp-btn" disabled={!canPlay} onClick={onRewind} title="回到开头">
           <SkipBack size={15} />
         </button>
@@ -105,46 +105,46 @@ export const TransportBar: React.FC<Props> = ({
         </button>
       </div>
 
-      <div className="lcd" title="当前位置 · 小节.拍">
-        <div className="lcd-main">{formatClock(currentTime)}</div>
-        <div className="lcd-sub">
-          <span>{formatBarBeat(currentTime, bpm)}</span>
-          <span className="lcd-dim">/ {formatClock(durationSec)}</span>
+      <div className="lcd-display">
+        <div className="lcd-seg" title="当前位置 · 小节.拍">
+          <div className="lcd-main">{formatClock(currentTime)}</div>
+          <div className="lcd-sub">
+            <span>{formatBarBeat(currentTime, bpm)}</span>
+            <span className="lcd-dim">/ {formatClock(durationSec)}</span>
+          </div>
+        </div>
+        <div className="lcd-seg lcd-seg-center" title="速度 (BPM)，点击数字可修改">
+          {editingBpm === null ? (
+            <button className="lcd-value" onClick={() => setEditingBpm(String(bpm))}>
+              {bpm.toFixed(bpm % 1 === 0 ? 0 : 1)}
+            </button>
+          ) : (
+            <input
+              autoFocus
+              className="lcd-input"
+              value={editingBpm}
+              onChange={(e) => setEditingBpm(e.target.value)}
+              onBlur={commitBpm}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitBpm();
+                if (e.key === "Escape") setEditingBpm(null);
+              }}
+            />
+          )}
+          <div className="lcd-label">
+            BPM
+            <button className="lcd-link" onClick={onTapTempo} title="跟着节奏连续点击测速">
+              Tap
+            </button>
+          </div>
+        </div>
+        <div className="lcd-seg lcd-seg-center" title="自动识别的调性">
+          <div className="lcd-value">{keyLabel ?? "—"}</div>
+          <div className="lcd-label">Key</div>
         </div>
       </div>
 
-      <div className="lcd lcd-cell" title="速度 (BPM)，点击数字可修改">
-        {editingBpm === null ? (
-          <button className="lcd-value" onClick={() => setEditingBpm(String(bpm))}>
-            {bpm.toFixed(bpm % 1 === 0 ? 0 : 1)}
-          </button>
-        ) : (
-          <input
-            autoFocus
-            className="lcd-input"
-            value={editingBpm}
-            onChange={(e) => setEditingBpm(e.target.value)}
-            onBlur={commitBpm}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitBpm();
-              if (e.key === "Escape") setEditingBpm(null);
-            }}
-          />
-        )}
-        <div className="lcd-label">
-          BPM
-          <button className="lcd-link" onClick={onTapTempo} title="跟着节奏连续点击测速">
-            Tap
-          </button>
-        </div>
-      </div>
-
-      <div className="lcd lcd-cell" title="自动识别的调性">
-        <div className="lcd-value static">{keyLabel ?? "—"}</div>
-        <div className="lcd-label">调性</div>
-      </div>
-
-      <div className="transport-group">
+      <div className="tp-controls">
         <label className="tp-field" title="练习变速（不变调）">
           <span>速度</span>
           <select value={playbackRate} onChange={(e) => onRateChange(Number(e.target.value))}>
@@ -167,7 +167,7 @@ export const TransportBar: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="transport-group">
+      <div className="tp-controls">
         <button className={`tp-btn ${metronomeEnabled ? "on" : ""}`} onClick={onToggleMetronome} title="节拍器">
           <Timer size={15} />
         </button>

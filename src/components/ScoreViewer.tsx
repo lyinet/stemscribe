@@ -193,8 +193,8 @@ export const ScoreViewer: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header" style={{ flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title">
-          钢琴卷帘修音 & 多视图乐谱导出
+        <div className="card-title" title="钢琴卷帘编辑与多视图乐谱导出">
+          乐谱
           {stemName && (
             <span className="badge">
               {stemName} · {bpm.toFixed(1)} BPM · {notes.length} 音符
@@ -239,30 +239,20 @@ export const ScoreViewer: React.FC<Props> = ({
           >
             <Sparkles size={12} /> 1/16
           </button>
-          <button
-            className={`btn btn-sm ${viewMode === "pianoroll" ? "btn-active" : ""}`}
-            onClick={() => setViewMode("pianoroll")}
-          >
-            卷帘
-          </button>
-          <button
-            className={`btn btn-sm ${viewMode === "staff" ? "btn-active" : ""}`}
-            onClick={() => setViewMode("staff")}
-          >
-            五线谱
-          </button>
-          <button
-            className={`btn btn-sm ${viewMode === "tab" ? "btn-active" : ""}`}
-            onClick={() => setViewMode("tab")}
-          >
-            吉他谱
-          </button>
-          <button
-            className={`btn btn-sm ${viewMode === "jianpu" ? "btn-active" : ""}`}
-            onClick={() => setViewMode("jianpu")}
-          >
-            简谱 (1–7)
-          </button>
+          <div className="seg">
+            {(
+              [
+                ["pianoroll", "卷帘"],
+                ["staff", "五线谱"],
+                ["tab", "吉他谱"],
+                ["jianpu", "简谱"],
+              ] as const
+            ).map(([id, label]) => (
+              <button key={id} className={viewMode === id ? "on" : ""} onClick={() => setViewMode(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
           <button className="btn btn-sm" disabled={notes.length === 0} onClick={onExportMusicXml}>
             <FileCode2 size={13} /> XML
           </button>
@@ -292,19 +282,15 @@ export const ScoreViewer: React.FC<Props> = ({
           <div className="row" style={{ gap: 6 }}>
             {viewMode === "staff" && (
               <>
-                <span className="muted" style={{ fontSize: 11.5 }}>谱号：</span>
-                <button
-                  className={`btn btn-sm ${clef === "treble" ? "btn-active" : ""}`}
-                  onClick={() => setClef("treble")}
-                >
-                  高音 Treble
-                </button>
-                <button
-                  className={`btn btn-sm ${clef === "bass" ? "btn-active" : ""}`}
-                  onClick={() => setClef("bass")}
-                >
-                  低音 Bass
-                </button>
+                <span className="muted" style={{ fontSize: 11 }}>谱号</span>
+                <div className="seg">
+                  <button className={clef === "treble" ? "on" : ""} onClick={() => setClef("treble")}>
+                    高音
+                  </button>
+                  <button className={clef === "bass" ? "on" : ""} onClick={() => setClef("bass")}>
+                    低音
+                  </button>
+                </div>
               </>
             )}
             {viewMode === "jianpu" && (

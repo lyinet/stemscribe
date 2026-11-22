@@ -75,8 +75,8 @@ export const LyricsTimeline: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header" style={{ flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title">
-          <Mic size={14} /> 人声歌词时间轴对齐 (LRC / SRT)
+        <div className="card-title" title="人声歌词时间轴对齐 (LRC / SRT)">
+          <Mic size={14} /> 歌词
         </div>
         <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
           <label className="muted" style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>

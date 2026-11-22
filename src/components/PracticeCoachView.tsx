@@ -191,9 +191,9 @@ export const PracticeCoachView: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header">
-        <div className="card-title">
-          <Trophy size={16} color="#f59e0b" />
-          <span>AI 练琴教练 · 实时调音器 & 麦克风 / USB-MIDI 跟弹打分</span>
+        <div className="card-title" title="实时调音器与麦克风 / USB-MIDI 跟弹打分">
+          <Trophy size={14} color="#f59e0b" />
+          <span>跟弹打分</span>
           {totalChecks > 0 && (
             <span className="badge ok">
               {rank} 级 · 命中率 {accuracyPct.toFixed(1)}% · 连击 {combo}

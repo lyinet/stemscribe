@@ -311,20 +311,22 @@ export const PianoRollEditor: React.FC<Props> = ({
       <div className="row" style={{ marginBottom: 8, justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
         <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
           <span className="muted">吸附网格</span>
-          {[
-            { label: "关闭", val: 0 },
-            { label: "1/4", val: 1 },
-            { label: "1/8", val: 2 },
-            { label: "1/16", val: 4 },
-          ].map((opt) => (
-            <button
-              key={opt.val}
-              className={`btn btn-sm ${snapDiv === opt.val ? "btn-active" : ""}`}
-              onClick={() => setSnapDiv(opt.val)}
-            >
-              {opt.label}
-            </button>
-          ))}
+          <div className="seg">
+            {[
+              { label: "关闭", val: 0 },
+              { label: "1/4", val: 1 },
+              { label: "1/8", val: 2 },
+              { label: "1/16", val: 4 },
+            ].map((opt) => (
+              <button
+                key={opt.val}
+                className={snapDiv === opt.val ? "on" : ""}
+                onClick={() => setSnapDiv(opt.val)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           {scaleSet.size > 0 && (
             <label className="muted" style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
               <input

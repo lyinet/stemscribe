@@ -203,8 +203,8 @@ export const ChordTrack: React.FC<Props> = ({
   return (
     <div className="card" style={{ padding: "10px 14px" }}>
       <div className="card-header" style={{ marginBottom: 8 }}>
-        <div className="card-title">
-          <Music size={14} /> 端侧同步和弦轨 & 吉他指法图
+        <div className="card-title" title="和弦轨与吉他指法图">
+          <Music size={14} /> 和弦
           {displayActive && (
             <span className="badge ok" style={{ fontSize: 12, fontWeight: 600 }}>
               当前：{displayActive}

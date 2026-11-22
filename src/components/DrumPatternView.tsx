@@ -211,8 +211,8 @@ export const DrumPatternView: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header" style={{ flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title">
-          <Drum size={14} /> 交互式 16 步鼓机编辑器 (BD / SD / HH)
+        <div className="card-title" title="16 步鼓机编辑器 (BD / SD / HH)">
+          <Drum size={14} /> 鼓组
           {hits.length > 0 && <span className="badge">{hits.length} 打击点</span>}
         </div>
         <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>

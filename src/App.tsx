@@ -13,6 +13,7 @@ import {
   Layers,
   ListMusic,
   ListOrdered,
+  Loader2,
   Maximize2,
   MoreHorizontal,
   Package,
@@ -296,9 +297,8 @@ export const App: React.FC = () => {
   const [extractingLyrics, setExtractingLyrics] = useState(false);
   const [transcribingStem, setTranscribingStem] = useState<string | null>(null);
   const [llmLoading, setLlmLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState(
-    "StemScribe v0.9.15 就绪 — 修复构建并完成 macOS 整包签名，可直接从 GitHub Releases 下载安装"
-  );
+  const [loadingAudio, setLoadingAudio] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("就绪");
 
   const [relayConfig, setRelayConfig] = useState<LlmRelayConfig>(() => {
     try {
@@ -435,7 +435,7 @@ export const App: React.FC = () => {
       const enabled = anySolo ? st.solo : !st.muted;
       return { file_path: s.file_path, gain: st.gain, pan: st.pan ?? 0, enabled };
     });
-    setStatusMsg("正在合轨伴奏分轨 + 叠录 Take（含延迟补偿与 -1.0 dBFS 峰值标准化）...");
+    setStatusMsg("正在合轨导出成品 WAV…");
     const saved = await mixTakeWithStemsWav(inputs, wavBase64, takeGain, takeOffsetMs, savePath);
     setStatusMsg(`成品翻唱 WAV 已导出：${saved}`);
     return saved;
@@ -510,14 +510,15 @@ export const App: React.FC = () => {
     setIsPlaying(false);
     setCurrentTime(0);
     setStudioTab("falling");
-    setStatusMsg("已加载内置 4 轨演示曲《星海漫游》— 可点击右上角切换主题或进入全宽专注模式！");
+    setStatusMsg("已载入演示曲《星海漫游》");
   }, [eq, reverbPreset, reverbWet, metronomeEnabled]);
 
   const loadAudioByPath = useCallback(
     async (path: string) => {
+      setLoadingAudio(true);
       try {
         revokeDemoBlobs();
-        setStatusMsg("正在解析音频波形、调性、曲式段落与自动测速...");
+        setStatusMsg("正在分析音频…");
         const meta = await inspectAudioFile(path);
         setAudioMeta(meta);
         setStems([]);
@@ -543,9 +544,11 @@ export const App: React.FC = () => {
             engineRef.current?.setMetronome(metronomeEnabled, t.bpm);
           })
           .catch(() => setTempoInfo(null));
-        setStatusMsg(`已载入：${meta.file_name} (${meta.duration_sec.toFixed(1)}s) · 可点击「一键全自动扒带」`);
+        setStatusMsg(`已载入：${meta.file_name} (${meta.duration_sec.toFixed(1)}s)`);
       } catch (err) {
         setStatusMsg(`音频加载失败: ${String(err)}`);
+      } finally {
+        setLoadingAudio(false);
       }
     },
     [metronomeEnabled]
@@ -969,7 +972,7 @@ export const App: React.FC = () => {
     const dir = await pickDirectory();
     if (!dir) return;
     try {
-      setStatusMsg("正在打包导出完整扒带资料包（MIDI + MusicXML + LRC + 报告）...");
+      setStatusMsg("正在导出练习资料包…");
       const outDir = await exportPracticeBundle(proj, keyEst?.label ?? null, dir);
       setStatusMsg(`资料包已导出至：${outDir}`);
     } catch (err) {
@@ -1016,7 +1019,7 @@ export const App: React.FC = () => {
       return { file_path: s.file_path, gain: st.gain, pan: st.pan ?? 0, enabled };
     });
     try {
-      setStatusMsg("正在合成 -1.0 dBFS 峰值标准化混音 WAV...");
+      setStatusMsg("正在导出混音 WAV…");
       const saved = await exportMixedWav(inputs, savePath);
       setStatusMsg(`已导出标准化混音 WAV：${saved}`);
     } catch (err) {
@@ -1212,7 +1215,7 @@ export const App: React.FC = () => {
   const handleDetectStructure = async () => {
     if (!audioMeta) return;
     setDetectingStructure(true);
-    setStatusMsg("正在使用 Rust DSP 切分曲式段落（前奏 / 主歌 / 副歌 / 尾奏）...");
+    setStatusMsg("正在识别曲式段落…");
     try {
       const segs = await detectSongStructureLocal(audioMeta.file_path);
       setStructure(segs);
@@ -1227,7 +1230,7 @@ export const App: React.FC = () => {
   const handleDetectChords = async () => {
     if (!audioMeta) return;
     setDetectingChords(true);
-    setStatusMsg("正在使用 Rust DSP 识别全曲和弦与调性...");
+    setStatusMsg("正在识别和弦与调性…");
     try {
       const [res, keyRes] = await Promise.all([
         detectChordsLocal(audioMeta.file_path, 2.0),
@@ -1249,7 +1252,7 @@ export const App: React.FC = () => {
     const drumStem = stems.find((s) => s.name === "drums");
     if (!drumStem) return;
     setDetectingDrums(true);
-    setStatusMsg("正在使用 Rust 三频段检测器提取鼓组打击点...");
+    setStatusMsg("正在识别鼓组节奏…");
     try {
       const hits = await detectDrumHitsLocal(drumStem.file_path);
       setDrumHits(hits);
@@ -1404,7 +1407,7 @@ export const App: React.FC = () => {
       engineRef.current?.applyMixer(initMixer);
       engineRef.current?.setMasterEq(eq);
       engineRef.current?.setReverb(reverbPreset, reverbWet);
-      setStatusMsg("4 轨分离完成，可一键切换练琴预设、叠录翻唱或合轨导出成品 WAV。");
+      setStatusMsg("4 轨分离完成");
     } catch (err) {
       setStatusMsg(`分轨失败: ${String(err)}`);
     } finally {
@@ -1421,7 +1424,7 @@ export const App: React.FC = () => {
     if (!(await ensureModelInstalled("demucs"))) return;
     setAutoPipelining(true);
     try {
-      setStatusMsg("✨ 一键全自动扒带 (1/4)：正在 AI 4 轨分离（耗时约为歌曲时长的一半）...");
+      setStatusMsg("一键扒带 1/4 · AI 分轨中…");
       const resStems = await separateStems(audioMeta.file_path);
       setStems(resStems);
       const initMixer: Record<string, StemMixerState> = {};
@@ -1434,7 +1437,7 @@ export const App: React.FC = () => {
       engineRef.current?.setMasterEq(eq);
       engineRef.current?.setReverb(reverbPreset, reverbWet);
 
-      setStatusMsg("✨ 一键全自动扒带 (2/4)：正在识别全曲和弦、调性与曲式段落...");
+      setStatusMsg("一键扒带 2/4 · 识别和弦、调性与段落…");
       const [resChords, resKey, resStruct] = await Promise.all([
         detectChordsLocal(audioMeta.file_path, 2.0),
         detectKeyLocal(audioMeta.file_path),
@@ -1448,21 +1451,21 @@ export const App: React.FC = () => {
 
       const drumStem = resStems.find((s) => s.name === "drums");
       if (drumStem) {
-        setStatusMsg("✨ 一键全自动扒带 (3/4)：正在提取鼓组节奏步进...");
+        setStatusMsg("一键扒带 3/4 · 识别鼓组节奏…");
         const hits = await detectDrumHitsLocal(drumStem.file_path);
         setDrumHits(hits);
       }
 
       const melodyStem = resStems.find((s) => s.name === "vocals") ?? resStems[0];
       if (melodyStem && (await ensureModelInstalled("basic_pitch"))) {
-        setStatusMsg(`✨ 一键全自动扒带 (4/4)：正在转录「${melodyStem.label_zh}」主旋律 MIDI...`);
+        setStatusMsg(`一键扒带 4/4 · 转录「${melodyStem.label_zh}」…`);
         const tr = await transcribeStemToMidi(melodyStem.file_path, melodyStem.name);
         setActiveStemName(melodyStem.label_zh);
         setBpm(tr.estimated_bpm);
         commitNotes(tr.notes);
       }
 
-      setStatusMsg("🎉 一键全自动扒带完成！可录制叠录并合轨导出成品翻唱 WAV。");
+      setStatusMsg("扒带完成");
     } catch (err) {
       setStatusMsg(`自动扒带中断: ${String(err)}`);
     } finally {
@@ -1642,6 +1645,25 @@ export const App: React.FC = () => {
     (t) => t.id === studioTab
   )?.label;
 
+  const pipelineStep = autoPipelining ? statusMsg.match(/(\d)\/4/)?.[1] : null;
+  const busyLabel = separating
+    ? "AI 分轨中"
+    : autoPipelining
+      ? pipelineStep
+        ? `扒带 ${pipelineStep}/4`
+        : "一键扒带中"
+      : transcribingStem
+        ? "转谱中"
+        : detectingChords || detectingStructure || detectingDrums
+          ? "分析中"
+          : extractingLyrics
+            ? "提取歌词中"
+            : loadingAudio
+              ? "分析音频中"
+              : llmLoading
+                ? "AI 分析中"
+                : null;
+
   const editorTabCounts: Partial<Record<StudioTab, number>> = {
     score: transposedNotes.length,
     chords: chords.length,
@@ -1659,6 +1681,12 @@ export const App: React.FC = () => {
           <span className="song-title" data-tauri-drag-region title={audioMeta?.file_name}>
             {audioMeta ? audioMeta.file_name : notes.length > 0 ? activeStemName || "MIDI 乐谱" : "未打开歌曲"}
           </span>
+          {busyLabel && (
+            <span className="task-pill">
+              <Loader2 size={11} className="spin" />
+              {busyLabel}
+            </span>
+          )}
         </div>
 
         <TransportBar
@@ -1891,6 +1919,7 @@ export const App: React.FC = () => {
             }
           />
 
+          {(audioMeta || notes.length > 0) && (
           <div className={`editor ${editorOpen ? "" : "collapsed"}`} style={editorOpen ? { height: editorHeight } : undefined}>
             {editorOpen && <div className="editor-resize" onMouseDown={startEditorResize} title="拖动调整高度" />}
             <div className="editor-tabs">
@@ -2118,6 +2147,7 @@ export const App: React.FC = () => {
               </div>
             )}
           </div>
+          )}
         </section>
 
         {aiPanelOpen && (
@@ -2154,16 +2184,17 @@ export const App: React.FC = () => {
       </main>
 
       <footer className="statusbar">
-        <span className="statusbar-msg" title={statusMsg}>{statusMsg}</span>
-        <span className="statusbar-meta">
-          ONNX Runtime · v0.9.15
+        <span className="statusbar-msg" title={statusMsg}>
+          {busyLabel && <Loader2 size={11} className="spin" />}
+          {statusMsg}
         </span>
+        <span className="statusbar-meta">ONNX Runtime · v{__APP_VERSION__}</span>
       </footer>
 
       <SettingsModal
         open={showSettings}
         initialSection={settingsSection}
-        appVersion="0.9.15"
+        appVersion={__APP_VERSION__}
         theme={theme}
         themeLabels={THEME_LABELS}
         relayConfig={relayConfig}

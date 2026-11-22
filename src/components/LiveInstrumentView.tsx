@@ -161,8 +161,8 @@ export const LiveInstrumentView: React.FC<Props> = ({
     <div className="card">
       <div className="card-header">
         <div className="card-title">
-          <Piano size={16} />
-          <span>实时交互琴键 & 吉他指板</span>
+          <Piano size={14} />
+          <span>琴键 / 指板</span>
           {soundingChordSymbol && (
             <span className="badge ok">
               实际和弦：{soundingChordSymbol}

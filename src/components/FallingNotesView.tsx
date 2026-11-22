@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+
 import { NOTE_NAMES_SHARP } from "../lib/musicTheory";
 import type { MidiNote } from "../types/music";
 
@@ -249,9 +249,8 @@ export const FallingNotesView: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header" style={{ flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title">
-          <Sparkles size={16} color="#38bdf8" />
-          <span>Synthesia 瀑布流下落音符（左右手分色跟弹）</span>
+        <div className="card-title" title="Synthesia 下落音符，支持左右手分色跟弹">
+          瀑布流
           <span className="badge">{notes.length} 音符</span>
         </div>
 
@@ -267,38 +266,42 @@ export const FallingNotesView: React.FC<Props> = ({
             className="select"
             value={splitMidi}
             onChange={(e) => setSplitMidi(Number(e.target.value))}
-            style={{ width: 92, padding: "3px 6px", fontSize: 11.5 }}
+            style={{ width: 92, height: 24, padding: "0 20px 0 8px", fontSize: 11 }}
             title="左右手分割键位"
           >
             <option value={55}>G3 分割</option>
             <option value={60}>C4 分割</option>
             <option value={64}>E4 分割</option>
           </select>
-          {(
-            [
-              { id: "both", label: "双手" },
-              { id: "right", label: "仅右手" },
-              { id: "left", label: "仅左手" },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.id}
-              className={`btn btn-sm ${handFilter === opt.id ? "btn-active" : ""}`}
-              onClick={() => setHandFilter(opt.id)}
-            >
-              {opt.label}
-            </button>
-          ))}
+          <div className="seg">
+            {(
+              [
+                { id: "both", label: "双手" },
+                { id: "right", label: "仅右手" },
+                { id: "left", label: "仅左手" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                className={handFilter === opt.id ? "on" : ""}
+                onClick={() => setHandFilter(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <span className="muted">视野</span>
-          {[2, 4, 6].map((sec) => (
-            <button
-              key={sec}
-              className={`btn btn-sm ${lookaheadSec === sec ? "btn-active" : ""}`}
-              onClick={() => setLookaheadSec(sec)}
-            >
-              {sec}s
-            </button>
-          ))}
+          <div className="seg">
+            {[2, 4, 6].map((sec) => (
+              <button
+                key={sec}
+                className={lookaheadSec === sec ? "on" : ""}
+                onClick={() => setLookaheadSec(sec)}
+              >
+                {sec}s
+              </button>
+            ))}
+          </div>
           <button
             className={`btn btn-sm ${showLabels ? "btn-active" : ""}`}
             onClick={() => setShowLabels((v) => !v)}

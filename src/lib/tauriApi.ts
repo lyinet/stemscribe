@@ -466,7 +466,7 @@ export async function onMacosMenuAction(
 export async function getSystemDiagnostics(): Promise<SystemDiagnostics> {
   if (!isTauriRuntime()) {
     return {
-      app_version: "0.9.9",
+      app_version: __APP_VERSION__,
       os: "macos (preview)",
       arch: "aarch64",
       coreml_enabled: true,
