@@ -1,0 +1,179 @@
+use crate::audio::chords::ChordEvent;
+use crate::audio::structure::SongStructureSegment;
+use crate::llm::lyrics::LyricLine;
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::fmt::Write as FmtWrite;
+use std::fs;
+use std::path::Path;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LeadSheetInput {
+    pub title: String,
+    pub key_label: String,
+    pub bpm: f32,
+    pub capo_fret: i32,
+    pub chords: Vec<ChordEvent>,
+    pub lyrics: Vec<LyricLine>,
+    pub structure: Vec<SongStructureSegment>,
+}
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+pub fn render_leadsheet_html(input: &LeadSheetInput) -> String {
+    let mut html = String::new();
+    let title = escape_html(&input.title);
+    let key = escape_html(&input.key_label);
+    let capo_text = if input.capo_fret > 0 {
+        format!("变调夹夹 {} 品", input.capo_fret)
+    } else {
+        "原调不夹 (Capo 0)".to_string()
+    };
+
+    // Unique chord chips
+    let mut unique_chords: Vec<String> = Vec::new();
+    for c in &input.chords {
+        if !unique_chords.contains(&c.symbol) {
+            unique_chords.push(c.symbol.clone());
+        }
+    }
+
+    let _ = write!(
+        html,
+        r#"<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>{title} — StemScribe 弹唱和弦谱</title>
+<style>
+  @page {{ size: A4; margin: 18mm; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif; color: #111827; max-width: 780px; margin: 0 auto; padding: 24px; line-height: 1.6; }}
+  .header {{ border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end; }}
+  .title {{ font-size: 26px; font-weight: 800; margin: 0; }}
+  .meta {{ font-size: 13px; color: #4b5563; margin-top: 4px; }}
+  .chords-bar {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }}
+  .chord-pill {{ padding: 4px 12px; border-radius: 6px; border: 1px solid #d1d5db; background: #f3f4f6; font-weight: 700; font-size: 14px; }}
+  .section-tag {{ display: inline-block; margin: 14px 0 6px; padding: 2px 10px; border-radius: 999px; background: #e0e7ff; color: #3730a3; font-size: 12px; font-weight: 700; }}
+  .line-block {{ margin-bottom: 12px; page-break-inside: avoid; }}
+  .line-chords {{ font-size: 13px; font-weight: 700; color: #2563eb; letter-spacing: 0.4px; min-height: 18px; }}
+  .line-text {{ font-size: 16px; color: #111827; }}
+  .footer {{ margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 10px; font-size: 11px; color: #6b7280; text-align: right; }}
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1 class="title">{title}</h1>
+      <div class="meta">调性：{key} &nbsp;·&nbsp; 速度：{bpm:.0} BPM &nbsp;·&nbsp; {capo}</div>
+    </div>
+    <div class="meta">StemScribe A4 弹唱谱</div>
+  </div>
+  <div class="chords-bar">"#,
+        title = title,
+        key = key,
+        bpm = input.bpm,
+        capo = escape_html(&capo_text)
+    );
+
+    for sym in &unique_chords {
+        let _ = write!(html, r#"<span class="chord-pill">{}</span>"#, escape_html(sym));
+    }
+    html.push_str("</div>\n");
+
+    if input.lyrics.is_empty() {
+        html.push_str(r#"<div class="section-tag">全曲和弦走向</div><div class="line-block"><div class="line-chords">"#);
+        let prog: Vec<String> = input
+            .chords
+            .iter()
+            .map(|c| format!("[{}] ({:.0}s)", escape_html(&c.symbol), c.start_sec))
+            .collect();
+        html.push_str(&prog.join(" &nbsp;→&nbsp; "));
+        html.push_str("</div></div>\n");
+    } else {
+        let mut last_section_id: Option<String> = None;
+        for line in &input.lyrics {
+            if let Some(seg) = input
+                .structure
+                .iter()
+                .find(|s| line.start_sec >= s.start_sec && line.start_sec < s.end_sec)
+            {
+                if last_section_id.as_deref() != Some(seg.id.as_str()) {
+                    last_section_id = Some(seg.id.clone());
+                    let _ = write!(
+                        html,
+                        r#"<div class="section-tag">{}</div>"#,
+                        escape_html(&seg.label)
+                    );
+                }
+            }
+            let matching_chords: Vec<String> = input
+                .chords
+                .iter()
+                .filter(|c| c.end_sec > line.start_sec && c.start_sec < line.end_sec)
+                .map(|c| format!("[{}]", escape_html(&c.symbol)))
+                .collect();
+            let _ = write!(
+                html,
+                r#"<div class="line-block"><div class="line-chords">{}</div><div class="line-text">{}</div></div>"#,
+                matching_chords.join(" &nbsp;&nbsp; "),
+                escape_html(&line.text)
+            );
+        }
+    }
+
+    html.push_str(
+        r#"<div class="footer">Generated by StemScribe for macOS (Apple Silicon)</div></body></html>"#,
+    );
+    html
+}
+
+pub fn export_leadsheet_html(input: &LeadSheetInput, save_path: &str) -> Result<String> {
+    let html = render_leadsheet_html(input);
+    let path = Path::new(save_path);
+    fs::write(path, html)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_render_leadsheet_html_contains_chords_and_lyrics() {
+        let input = LeadSheetInput {
+            title: "星海漫游".into(),
+            key_label: "C 大调".into(),
+            bpm: 120.0,
+            capo_fret: 2,
+            chords: vec![ChordEvent {
+                start_sec: 0.0,
+                end_sec: 4.0,
+                symbol: "C".into(),
+                confidence: 0.95,
+            }],
+            lyrics: vec![LyricLine {
+                start_sec: 0.5,
+                end_sec: 3.5,
+                text: "星光漫过录音室的玻璃窗".into(),
+            }],
+            structure: vec![SongStructureSegment {
+                id: "s0".into(),
+                label: "前奏 Intro".into(),
+                kind: "intro".into(),
+                start_sec: 0.0,
+                end_sec: 4.0,
+                energy: 0.4,
+            }],
+        };
+        let html = render_leadsheet_html(&input);
+        assert!(html.contains("星海漫游"));
+        assert!(html.contains("变调夹夹 2 品"));
+        assert!(html.contains("[C]"));
+        assert!(html.contains("星光漫过录音室的玻璃窗"));
+    }
+}

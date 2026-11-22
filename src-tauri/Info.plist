@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>StemScribe 需要访问您的麦克风或外接音频接口，用于高精度实时调音、AI 跟弹音准打分以及伴奏同步叠录翻唱。</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>

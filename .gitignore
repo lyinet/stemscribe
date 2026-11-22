@@ -1,0 +1,26 @@
+# Dependencies & build outputs
+node_modules/
+dist/
+dist-ssr/
+src-tauri/target/
+*.local
+
+# macOS & Editor files
+.DS_Store
+.AppleDouble
+.LSOverride
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Python & logs
+__pycache__/
+*.pyc
+*.log
+npm-debug.log*
+
+# Local runtime caches & models
+*.part
+*.onnx
+.env
+.env.*
