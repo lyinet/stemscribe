@@ -25,7 +25,9 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Cmd + S", "保存当前 .stemscribe.json 工程"],
   ["Cmd + E / Cmd + Shift + E", "导出 .mid / 一键导出 7 文件全量扒带资料包"],
   ["Cmd + Z / Cmd + Shift + Z", "钢琴卷帘修音撤销 / 重做"],
-  ["Cmd + Q", "一键 1/16 拍节奏量化对齐"],
+  ["Cmd + U", "一键 1/16 拍节奏量化对齐"],
+  ["Cmd + ,", "打开设置（主题 / AI 服务 / 模型 / MIDI 设备）"],
+  ["在时间尺上拖动", "框选 A-B 循环区；双击段落块循环该段"],
   ["?", "打开 / 关闭本快捷键速查表"],
 ];
 

@@ -1,23 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
-  Cpu,
+  Bot,
+  ChevronDown,
+  ChevronUp,
+  Music,
+  Settings,
   Download,
   FileText,
   FolderOpen,
-  HardDrive,
   HelpCircle,
   History,
-  KeyRound,
   Layers,
   ListMusic,
   ListOrdered,
   Maximize2,
   MoreHorizontal,
   Package,
-  Palette,
-  PanelRightClose,
-  PanelRightOpen,
   Save,
   Search,
   Share2,
@@ -29,7 +27,6 @@ import { BatchQueueModal } from "./components/BatchQueueModal";
 import { ChordTrack } from "./components/ChordTrack";
 import { CommandPaletteModal, type PaletteCommand } from "./components/CommandPaletteModal";
 import { CoverStudioView } from "./components/CoverStudioView";
-import { CueMarkerBar } from "./components/CueMarkerBar";
 import { DiagnosticsModal } from "./components/DiagnosticsModal";
 import { DrumPatternView } from "./components/DrumPatternView";
 import { FallingNotesView } from "./components/FallingNotesView";
@@ -43,10 +40,11 @@ import { ScoreViewer } from "./components/ScoreViewer";
 import { SetlistModal } from "./components/SetlistModal";
 import { ShareCardModal } from "./components/ShareCardModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
-import { SongStructureBar } from "./components/SongStructureBar";
 import { StageModeOverlay } from "./components/StageModeOverlay";
-import { StudioFxBar } from "./components/StudioFxBar";
-import { WaveformPlayer, type MixPresetId } from "./components/WaveformPlayer";
+import { SettingsModal, type SettingsSection } from "./components/SettingsModal";
+import { Arrangement, type ArrangementTrack } from "./components/daw/Arrangement";
+import { MixerPanel, type MixPresetId } from "./components/daw/MixerPanel";
+import { TransportBar } from "./components/daw/TransportBar";
 import {
   MultiStemAudioEngine,
   type MasterEqState,
@@ -137,7 +135,55 @@ import type {
   TempoAndLoudness,
 } from "./types/music";
 
-type StudioTab = "falling" | "instrument" | "coach" | "cover" | "score" | "drums" | "lyrics";
+type StudioTab =
+  | "score"
+  | "chords"
+  | "drums"
+  | "lyrics"
+  | "mixer"
+  | "falling"
+  | "instrument"
+  | "coach"
+  | "cover";
+
+const STEM_COLORS: Record<string, string> = {
+  original: "#94a3b8",
+  vocals: "#f43f5e",
+  drums: "#f59e0b",
+  bass: "#a855f7",
+  other: "#38bdf8",
+};
+
+const EDITOR_MIN_H = 180;
+
+const EDITOR_TAB_GROUPS: Array<{ label: string; tabs: Array<{ id: StudioTab; label: string }> }> = [
+  {
+    label: "编辑",
+    tabs: [
+      { id: "score", label: "乐谱 / 卷帘" },
+      { id: "chords", label: "和弦" },
+      { id: "drums", label: "鼓组" },
+      { id: "lyrics", label: "歌词" },
+      { id: "mixer", label: "混音" },
+    ],
+  },
+  {
+    label: "练习",
+    tabs: [
+      { id: "falling", label: "瀑布流" },
+      { id: "instrument", label: "琴键 / 指板" },
+      { id: "coach", label: "跟弹打分" },
+      { id: "cover", label: "翻唱录音" },
+    ],
+  },
+];
+
+const REHARM_STYLES: Array<{ id: ReharmonizeStyle; label: string }> = [
+  { id: "jazz_neosoul", label: "爵士 / City Pop" },
+  { id: "folk_open", label: "民谣指弹" },
+  { id: "cinematic_minor", label: "暗黑电影感" },
+  { id: "pop_beginner", label: "新手极简" },
+];
 type AppTheme = "dark" | "midnight" | "light";
 
 function isDemoBlobPath(path: string | undefined): boolean {
@@ -168,7 +214,11 @@ export const App: React.FC = () => {
     const saved = localStorage.getItem("stemscribe_theme") as AppTheme | null;
     return saved && THEME_CYCLE.includes(saved) ? saved : "dark";
   });
-  const [focusMode, setFocusMode] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  const [editorOpen, setEditorOpen] = useState(true);
+  const [editorHeight, setEditorHeight] = useState(300);
 
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [showModelModal, setShowModelModal] = useState(false);
@@ -186,7 +236,7 @@ export const App: React.FC = () => {
     rank: string;
   } | null>(null);
   const [stageModeOpen, setStageModeOpen] = useState(false);
-  const [studioTab, setStudioTab] = useState<StudioTab>("falling");
+  const [studioTab, setStudioTab] = useState<StudioTab>("score");
 
   const [midiDevices, setMidiDevices] = useState<MidiInputDeviceInfo[]>([]);
   const [pressedHardwareNotes, setPressedHardwareNotes] = useState<number[]>([]);
@@ -260,11 +310,17 @@ export const App: React.FC = () => {
   const [refineSummary, setRefineSummary] = useState("");
   const [fingeringTips, setFingeringTips] = useState<string[]>([]);
 
-  const handleCycleTheme = () => {
-    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length];
+  const applyTheme = (next: AppTheme) => {
     setTheme(next);
     localStorage.setItem("stemscribe_theme", next);
     setStatusMsg(`已切换界面主题：${THEME_LABELS[next]}`);
+  };
+
+  const handleCycleTheme = () => applyTheme(THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length]);
+
+  const openSettings = (section: SettingsSection = "general") => {
+    setSettingsSection(section);
+    setShowSettings(true);
   };
 
   const revokeDemoBlobs = () => {
@@ -794,6 +850,31 @@ export const App: React.FC = () => {
     }
   };
 
+  const originalStem = useMemo<StemOutput | null>(
+    () =>
+      audioMeta && stems.length === 0
+        ? {
+            name: "original",
+            label_zh: "原曲",
+            file_path: audioMeta.file_path,
+            waveform_peaks: audioMeta.waveform_peaks,
+            duration_sec: audioMeta.duration_sec,
+          }
+        : null,
+    [audioMeta, stems.length]
+  );
+  const playableStems = useMemo(() => (stems.length > 0 ? stems : originalStem ? [originalStem] : []), [stems, originalStem]);
+
+  useEffect(() => {
+    if (!originalStem) return;
+    const init = { original: { muted: false, solo: false, gain: 1, pan: 0 } };
+    setMixer(init);
+    engineRef.current?.loadStems([originalStem], (t) => setCurrentTime(t));
+    engineRef.current?.applyMixer(init);
+    setIsPlaying(false);
+    setCurrentTime(0);
+  }, [originalStem]);
+
   const handleAddMarker = useCallback((label: string, timeSec: number) => {
     setMarkers((prev) =>
       [...prev, { id: `${Date.now()}_${Math.random()}`, label, time_sec: timeSec }].sort(
@@ -819,7 +900,7 @@ export const App: React.FC = () => {
   };
 
   const handleTogglePlay = useCallback(async () => {
-    if (!engineRef.current || stems.length === 0) return;
+    if (!engineRef.current || playableStems.length === 0) return;
     if (isPlaying) {
       engineRef.current.pause();
       setIsPlaying(false);
@@ -827,7 +908,7 @@ export const App: React.FC = () => {
       setIsPlaying(true);
       await engineRef.current.playWithCountIn(countInEnabled);
     }
-  }, [isPlaying, stems.length, countInEnabled]);
+  }, [isPlaying, playableStems.length, countInEnabled]);
 
   const handleOpenAudio = useCallback(async () => {
     const path = await pickAudioFile();
@@ -1003,6 +1084,9 @@ export const App: React.FC = () => {
         case "open_models":
           setShowModelModal(true);
           break;
+        case "open_settings":
+          openSettings("general");
+          break;
         default:
           break;
       }
@@ -1033,8 +1117,10 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const target = e.target as HTMLElement;
+      const tag = target?.tagName;
+      const inputType = tag === "INPUT" ? (target as HTMLInputElement).type : "";
+      if ((tag === "INPUT" && !["range", "checkbox", "button"].includes(inputType)) || tag === "TEXTAREA" || tag === "SELECT") return;
 
       if (e.key === "Escape" && stageModeOpen) {
         e.preventDefault();
@@ -1477,70 +1563,139 @@ export const App: React.FC = () => {
     { id: "reharm_folk", category: "和弦", label: "一键重配和弦：民谣指弹清新", disabled: chords.length === 0, run: () => handleReharmonize("folk_open") },
     { id: "usb_midi", category: "硬件", label: "连接外接 USB-MIDI 键盘 / 电钢琴", run: handleConnectMidi },
     { id: "theme", category: "外观", label: `切换视觉主题（当前：${THEME_LABELS[theme]}）`, run: handleCycleTheme },
-    { id: "focus", category: "外观", label: focusMode ? "退出全宽专注模式（展开右侧 AI 栏）" : "开启全宽专注模式（收起右侧 AI 栏）", run: () => setFocusMode((v) => !v) },
+    { id: "focus", category: "外观", label: aiPanelOpen ? "隐藏右侧 AI 助手面板" : "显示右侧 AI 助手面板", run: () => setAiPanelOpen((v) => !v) },
+    { id: "settings", category: "设置", label: "打开设置（主题 / AI 服务 / 模型 / MIDI）", shortcut: "Cmd+,", run: () => openSettings("general") },
+    { id: "tab_chords", category: "视图", label: "切换到：和弦编辑与风格重配", run: () => setStudioTab("chords") },
+    { id: "tab_mixer", category: "视图", label: "切换到：混音台（EQ / 混响 / 练习场景）", run: () => setStudioTab("mixer") },
     { id: "models", category: "设置", label: "打开本地 CoreML / ONNX 模型管理器", run: () => setShowModelModal(true) },
     { id: "diagnostics", category: "设置", label: "打开系统诊断与环境自检（一键复制报告）", run: () => setShowDiagnosticsModal(true) },
     { id: "projects", category: "文件", label: "打开本地扒带工程库（搜索 / 重命名 / 删除）", run: () => setShowProjectLibrary(true) },
     { id: "batch", category: "工具", label: "打开多曲目批量分轨队列", shortcut: "Cmd+B", run: () => setShowBatchModal(true) },
   ];
 
+  const openEditor = (tab: StudioTab) => {
+    setStudioTab(tab);
+    setEditorOpen(true);
+  };
+
+  const startEditorResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = editorHeight;
+    const move = (ev: MouseEvent) => {
+      const maxH = Math.max(EDITOR_MIN_H, window.innerHeight - 280);
+      setEditorHeight(Math.max(EDITOR_MIN_H, Math.min(maxH, startH + (startY - ev.clientY))));
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  const arrangementTracks: ArrangementTrack[] = playableStems.map((st) => ({
+    id: st.name,
+    name: st.label_zh,
+    subtitle: st.name === "original" ? "未分轨 · 完整混音" : st.name,
+    color: STEM_COLORS[st.name] ?? "#38bdf8",
+    peaks: st.waveform_peaks,
+    isOriginal: st.name === "original",
+  }));
+
+  const editorTabCounts: Partial<Record<StudioTab, number>> = {
+    score: transposedNotes.length,
+    chords: chords.length,
+    drums: drumHits.length,
+    lyrics: lyrics.length,
+    coach: practiceRecords.length,
+    cover: archivedTakes.length,
+  };
+
   return (
     <div className="app-shell" data-theme={theme}>
       <header className="topbar" data-tauri-drag-region>
         <div className="topbar-left" data-tauri-drag-region>
           <span className="brand" data-tauri-drag-region>StemScribe</span>
-          <span className={`badge ${modelStatus?.coreml_enabled ? "ok" : ""}`}>
-            <Cpu size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
-            {modelStatus?.coreml_enabled ? "CoreML" : "CPU"}
+          <span className="song-title" data-tauri-drag-region title={audioMeta?.file_name}>
+            {audioMeta ? audioMeta.file_name : notes.length > 0 ? activeStemName || "MIDI 乐谱" : "未打开歌曲"}
           </span>
-          {keyEst && (
-            <span className="badge ok">
-              <KeyRound size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
-              {keyEst.label}
-            </span>
-          )}
-          {tempoInfo && (
-            <span className="badge">
-              <Activity size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
-              {tempoInfo.bpm.toFixed(1)} BPM
-            </span>
-          )}
         </div>
 
-        <div className="topbar-right">
-          <div className="icon-group">
-            <button className="btn btn-icon" onClick={() => setShowCommandPalette(true)} title="全局快捷命令面板 (Cmd+K)">
-              <Search size={14} />
-            </button>
-            <button
-              className="btn btn-icon"
-              onClick={handleCycleTheme}
-              title={`切换视觉主题（当前：${THEME_LABELS[theme]}）`}
-            >
-              <Palette size={14} />
-            </button>
-            <button
-              className={`btn btn-icon ${focusMode ? "btn-active" : ""}`}
-              onClick={() => setFocusMode((v) => !v)}
-              title={focusMode ? "展开右侧 AI 编曲助手栏" : "专注模式：收起右侧栏获得全宽画布"}
-            >
-              {focusMode ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
-            </button>
-            <button className="btn btn-icon" onClick={() => setShowDiagnosticsModal(true)} title="系统诊断与运行环境自检">
-              <Cpu size={14} />
-            </button>
-            <button className="btn btn-icon" onClick={() => setShowShortcutsModal(true)} title="快捷键速查 (?)">
-              <HelpCircle size={14} />
-            </button>
-          </div>
+        <TransportBar
+          canPlay={playableStems.length > 0}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          durationSec={audioMeta?.duration_sec ?? 0}
+          bpm={bpm}
+          keyLabel={keyEst?.label ?? null}
+          playbackRate={playbackRate}
+          transposeSemitones={transposeSemitones}
+          loopEnabled={loopEnabled}
+          progressiveRampEnabled={progressiveRampEnabled}
+          metronomeEnabled={metronomeEnabled}
+          countInEnabled={countInEnabled}
+          onTogglePlay={handleTogglePlay}
+          onStop={() => {
+            engineRef.current?.pause();
+            setIsPlaying(false);
+            engineRef.current?.seek(0);
+          }}
+          onRewind={() => engineRef.current?.seek(0)}
+          onToggleLoop={() => {
+            const next = !loopEnabled;
+            setLoopEnabled(next);
+            engineRef.current?.setLoop(next, loopA, loopB);
+          }}
+          onToggleProgressiveRamp={() => setProgressiveRampEnabled((v) => !v)}
+          onToggleMetronome={() => {
+            const next = !metronomeEnabled;
+            setMetronomeEnabled(next);
+            engineRef.current?.setMetronome(next, bpm);
+          }}
+          onToggleCountIn={() => setCountInEnabled((v) => !v)}
+          onBpmChange={(nextBpm) => {
+            setBpm(nextBpm);
+            engineRef.current?.setMetronome(metronomeEnabled, nextBpm);
+          }}
+          onTapTempo={handleTapTempo}
+          onRateChange={(r) => {
+            setPlaybackRate(r);
+            engineRef.current?.setPlaybackRate(r);
+          }}
+          onTransposeChange={(semi) => {
+            setTransposeSemitones(semi);
+            engineRef.current?.setTranspose(semi);
+          }}
+        />
 
+        <div className="topbar-right">
+          <button className="btn" onClick={handleOpenAudio} title="导入音频文件 (⌘O)">
+            <FolderOpen size={14} /> 导入
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={!audioMeta || autoPipelining || separating}
+            onClick={handleSmartAutoPipeline}
+            title="自动完成：AI 分 4 轨 → 识别和弦/调性/段落 → 鼓组 → 主旋律扒谱"
+          >
+            <Wand2 size={14} /> {autoPipelining ? "扒带中..." : "一键扒带"}
+          </button>
+          <div className="toolbar-divider" />
+          <button
+            className={`btn btn-icon ${aiPanelOpen ? "btn-active" : ""}`}
+            onClick={() => setAiPanelOpen((v) => !v)}
+            title="AI 助手（编曲分析 / 智能修谱）"
+          >
+            <Bot size={16} />
+          </button>
           <div className="menu-anchor">
             <button
-              className={`btn ${showProjectsMenu ? "btn-active" : ""}`}
+              className={`btn btn-icon ${showProjectsMenu ? "btn-active" : ""}`}
               onClick={() => setShowProjectsMenu((v) => !v)}
               title="更多工具：工程库、歌单、导出、模型管理等"
             >
-              <MoreHorizontal size={14} /> 更多
+              <MoreHorizontal size={16} />
             </button>
             {showProjectsMenu && (
               <>
@@ -1548,16 +1703,23 @@ export const App: React.FC = () => {
                 <div className="menu-pop">
                   {(
                     [
+                      { icon: <Save size={14} />, label: "保存工程", hint: "⌘S", disabled: !audioMeta, onClick: handleSaveProject },
                       { icon: <FolderOpen size={14} />, label: `工程库 (${recentProjects.length})`, hint: "", onClick: () => setShowProjectLibrary(true) },
+                      { icon: <Music size={14} />, label: "导入 MIDI 文件", hint: "⌘I", onClick: handleImportMidi },
+                      null,
+                      { icon: <Layers size={14} />, label: separating ? "AI 分轨中..." : "仅 AI 分轨（不扒谱）", hint: "", disabled: !audioMeta || separating || autoPipelining || stems.length > 0, onClick: handleSeparateStems },
                       { icon: <ListOrdered size={14} />, label: `演出歌单 (${setlists.length})`, hint: "⌘L", onClick: () => setShowSetlistModal(true) },
                       { icon: <ListMusic size={14} />, label: "批量处理", hint: "⌘B", onClick: () => setShowBatchModal(true) },
-                      { icon: <HardDrive size={14} />, label: "模型管理", hint: "", onClick: () => setShowModelModal(true) },
                       null,
                       { icon: <FileText size={14} />, label: "弹唱谱排版 / 打印", hint: "⌘P", disabled: !audioMeta, onClick: () => setShowLeadSheetModal(true) },
                       { icon: <Maximize2 size={14} />, label: "演出提词器", hint: "F", disabled: !audioMeta, onClick: () => setStageModeOpen(true) },
                       { icon: <Share2 size={14} />, label: "导出分享图", hint: "", disabled: !audioMeta, onClick: () => setShowShareModal(true) },
                       { icon: <Package size={14} />, label: "导出练习资料包", hint: "", disabled: !audioMeta, onClick: handleExportBundle },
                       { icon: <Download size={14} />, label: "导出混音 WAV", hint: "", disabled: stems.length === 0, onClick: handleExportMixedWav },
+                      { icon: <Download size={14} />, label: "导出循环区 WAV", hint: "", disabled: !audioMeta || loopB <= loopA + 0.05, onClick: handleExportLoopSlice },
+                      null,
+                      { icon: <Search size={14} />, label: "命令面板", hint: "⌘K", onClick: () => setShowCommandPalette(true) },
+                      { icon: <HelpCircle size={14} />, label: "快捷键", hint: "?", onClick: () => setShowShortcutsModal(true) },
                     ] as Array<{ icon: React.ReactNode; label: string; hint: string; disabled?: boolean; onClick: () => void } | null>
                   ).map((item, idx) =>
                     item === null ? (
@@ -1596,248 +1758,128 @@ export const App: React.FC = () => {
             )}
           </div>
 
-          <div className="toolbar-divider" />
-
-          <button className="btn" onClick={handleOpenAudio} title="Cmd+O">
-            <FolderOpen size={14} /> 导入
-          </button>
-          <button className="btn" disabled={!audioMeta} onClick={handleSaveProject} title="Cmd+S">
-            <Save size={14} /> 保存
-          </button>
-          <button
-            className="btn"
-            disabled={!audioMeta || separating || autoPipelining}
-            onClick={handleSeparateStems}
-            title="仅运行 4 轨 AI 分离"
-          >
-            <Layers size={14} /> {separating ? "分轨中..." : "4 轨"}
-          </button>
-          <button
-            className="btn btn-primary"
-            disabled={!audioMeta || autoPipelining || separating}
-            onClick={handleSmartAutoPipeline}
-            title="自动执行：4 轨分离 → 和弦/调性/曲式 → 鼓组 → 主旋律转谱"
-          >
-            <Wand2 size={14} /> {autoPipelining ? "扒带中..." : "一键全自动扒带"}
+          <button className="btn btn-icon" onClick={() => openSettings("general")} title="设置 (⌘,)">
+            <Settings size={16} />
           </button>
         </div>
       </header>
 
-      <main className={`workspace ${focusMode ? "focus-mode" : ""}`}>
-        <section className="main-pane">
-          {!audioMeta && (
-            <div className="welcome-hero">
-              <div style={{ maxWidth: 680 }}>
-                <div className="badge ok" style={{ display: "inline-flex", marginBottom: 10 }}>
-                  <Sparkles size={12} style={{ marginRight: 5 }} />
-                  Apple Silicon 原生 AI 音乐扒带、成品翻唱合轨 & 舞台工作站 (v0.9.15 Preview)
+      <main className={`workspace ${aiPanelOpen ? "with-inspector" : ""}`}>
+        <section className="center-pane">
+          <Arrangement
+            durationSec={audioMeta?.duration_sec ?? 0}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            bpm={bpm}
+            tracks={arrangementTracks}
+            mixer={mixer}
+            transcribingStem={transcribingStem}
+            separating={separating}
+            structure={structure}
+            detectingStructure={detectingStructure}
+            chords={chords}
+            detectingChords={detectingChords}
+            transposeSemitones={transposeSemitones}
+            markers={markers}
+            notes={transposedNotes}
+            midiLabel={activeStemName}
+            loopEnabled={loopEnabled}
+            loopA={loopA}
+            loopB={loopB}
+            onSeek={(sec) => engineRef.current?.seek(sec)}
+            onSetLoop={(a, b) => {
+              setLoopA(a);
+              setLoopB(b);
+              setLoopEnabled(true);
+              engineRef.current?.setLoop(true, a, b);
+            }}
+            onMixerChange={handleMixerChange}
+            onTranscribeTrack={(id) => {
+              const stem = stems.find((st) => st.name === id);
+              if (stem) handleTranscribe(stem);
+            }}
+            onSeparate={handleSeparateStems}
+            onDetectStructure={handleDetectStructure}
+            onConvertStructureToMarkers={() => {
+              const converted = structure.map((sg) => ({
+                id: `mk_sec_${sg.id}_${Math.round(sg.start_sec * 10)}`,
+                time_sec: sg.start_sec,
+                label: sg.label,
+              }));
+              setMarkers(converted);
+              setStatusMsg(`已将 ${converted.length} 个段落转为书签。`);
+            }}
+            onDetectChords={handleDetectChords}
+            onOpenChordEditor={() => openEditor("chords")}
+            onAddMarker={() => {
+              const seg = structure.find((sg) => currentTime >= sg.start_sec && currentTime < sg.end_sec);
+              handleAddMarker(seg?.label ?? `书签 ${markers.length + 1}`, currentTime);
+            }}
+            onDeleteMarker={(id) => setMarkers((prev) => prev.filter((m) => m.id !== id))}
+            onOpenMidiEditor={() => openEditor("score")}
+            emptyState={
+              <div className="empty-card">
+                <div className="empty-icon">
+                  <Music size={26} />
                 </div>
-                <h2 style={{ margin: "0 0 8px", fontSize: 24, letterSpacing: -0.3 }}>
-                  把任何一首歌，1 分钟拆解成可弹、可录、可合轨发布的完整工程
-                </h2>
-                <p className="muted" style={{ fontSize: 13.5, lineHeight: 1.6, margin: "0 0 18px" }}>
-                  本地 CoreML 4 轨分离、离线 4 风格和弦智能重配、伴奏同步叠录与延迟补偿合轨导出、录音室混响、Synthesia 瀑布流、USB-MIDI 接入、A4 弹唱谱打印与 3 套视觉主题。
+                <h2>导入一首歌，开始扒带</h2>
+                <p>
+                  支持 MP3 / WAV / FLAC / M4A，可直接从访达拖进窗口。AI 会把歌曲拆成人声、鼓、贝斯、伴奏 4 轨，并自动识别和弦、段落和旋律。
                 </p>
-                <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                  <button className="btn btn-primary" onClick={handleLoadDemoSong}>
-                    <Sparkles size={15} /> 体验内置 4 轨演示曲（零配置即玩）
+                <div className="empty-actions">
+                  <button className="btn btn-primary btn-lg" onClick={handleOpenAudio}>
+                    <FolderOpen size={16} /> 导入音频
                   </button>
-                  <button className="btn" onClick={handleOpenAudio}>
-                    <FolderOpen size={15} /> 导入本地音频（或直接从 Finder 拖入）
+                  <button className="btn btn-lg" onClick={handleLoadDemoSong}>
+                    <Sparkles size={16} /> 试试演示曲
                   </button>
-                  <button className="btn" onClick={() => setShowSetlistModal(true)}>
-                    <ListOrdered size={15} /> 打开演出歌单 Setlist
+                  <button className="btn btn-lg" onClick={handleImportMidi}>
+                    <Music size={16} /> 导入 MIDI
                   </button>
                 </div>
+                <ol className="empty-steps">
+                  <li>
+                    <b>1</b>导入歌曲
+                  </li>
+                  <li>
+                    <b>2</b>点「一键扒带」
+                  </li>
+                  <li>
+                    <b>3</b>在下方看谱、编辑、跟弹
+                  </li>
+                </ol>
               </div>
+            }
+          />
+
+          <div className={`editor ${editorOpen ? "" : "collapsed"}`} style={editorOpen ? { height: editorHeight } : undefined}>
+            {editorOpen && <div className="editor-resize" onMouseDown={startEditorResize} title="拖动调整高度" />}
+            <div className="editor-tabs">
+              {EDITOR_TAB_GROUPS.map((group) => (
+                <div key={group.label} className="editor-tab-group">
+                  <span className="editor-group-label">{group.label}</span>
+                  {group.tabs.map((t) => (
+                    <button
+                      key={t.id}
+                      className={`editor-tab ${editorOpen && studioTab === t.id ? "on" : ""}`}
+                      onClick={() => openEditor(t.id)}
+                    >
+                      {t.label}
+                      {editorTabCounts[t.id] ? <span className="editor-count">{editorTabCounts[t.id]}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ))}
+              <button
+                className="icon-btn editor-toggle"
+                onClick={() => setEditorOpen((v) => !v)}
+                title={editorOpen ? "收起编辑器" : "展开编辑器"}
+              >
+                {editorOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+              </button>
             </div>
-          )}
-
-          {audioMeta && (
-            <>
-              <SongStructureBar
-                segments={structure}
-                durationSec={audioMeta?.duration_sec ?? 0}
-                currentTime={currentTime}
-                detecting={detectingStructure}
-                hasAudio={Boolean(audioMeta)}
-                onDetectStructure={handleDetectStructure}
-                onSeek={(sec) => engineRef.current?.seek(sec)}
-                onLoopSection={(seg) => {
-                  setLoopA(seg.start_sec);
-                  setLoopB(seg.end_sec);
-                  setLoopEnabled(true);
-                  engineRef.current?.setLoop(true, seg.start_sec, seg.end_sec);
-                  engineRef.current?.seek(seg.start_sec);
-                  setStatusMsg(`已锁定 A-B 循环到「${seg.label}」(${seg.start_sec.toFixed(1)}s - ${seg.end_sec.toFixed(1)}s)`);
-                }}
-                onConvertToMarkers={(segs) => {
-                  const converted = segs.map((s) => ({
-                    id: `mk_sec_${s.id}_${Math.round(s.start_sec * 10)}`,
-                    time_sec: s.start_sec,
-                    label: s.label,
-                  }));
-                  setMarkers(converted);
-                  setStatusMsg(`已将 ${converted.length} 个识别段落一键转为工程书签。`);
-                }}
-              />
-
-              <StudioFxBar
-                hasChords={chords.length > 0}
-                canRestoreChords={Boolean(originalChordsBackup)}
-                activeReharmStyle={activeReharmStyle}
-                reverbPreset={reverbPreset}
-                reverbWet={reverbWet}
-                isPlaying={isPlaying}
-                getMasterPeak={() => engineRef.current?.getMasterPeakLevel() ?? 0}
-                onReharmonize={handleReharmonize}
-                onRestoreOriginalChords={handleRestoreOriginalChords}
-                onReverbChange={handleReverbChange}
-              />
-
-              <CueMarkerBar
-                markers={markers}
-                currentTime={currentTime}
-                durationSec={audioMeta?.duration_sec ?? 0}
-                hasAudio={Boolean(audioMeta)}
-                onAddMarker={handleAddMarker}
-                onDeleteMarker={(id) => setMarkers((prev) => prev.filter((m) => m.id !== id))}
-                onSeek={(sec) => engineRef.current?.seek(sec)}
-                onLoopSection={handleLoopMarkerSection}
-              />
-
-              <ChordTrack
-                chords={chords}
-                durationSec={audioMeta?.duration_sec ?? 0}
-                currentTime={currentTime}
-                transposeSemitones={transposeSemitones}
-                keyTonic={keyEst?.tonic}
-                keyMode={keyEst?.mode}
-                detecting={detectingChords}
-                onDetectChords={handleDetectChords}
-                onChordsChange={setChords}
-                onSeek={(sec) => engineRef.current?.seek(sec)}
-                onAuditionChord={(sym) => {
-                  const pitches = chordToMidiVoicing(sym, 4);
-                  pitches.forEach((p, idx) => {
-                    window.setTimeout(() => {
-                      engineRef.current?.playSingleNote(p, 0.75, 86);
-                    }, idx * 35);
-                  });
-                }}
-              />
-
-              <WaveformPlayer
-                stems={stems}
-                durationSec={audioMeta?.duration_sec ?? 0}
-                currentTime={currentTime}
-                isPlaying={isPlaying}
-                bpm={bpm}
-                playbackRate={playbackRate}
-                metronomeEnabled={metronomeEnabled}
-                countInEnabled={countInEnabled}
-                progressiveRampEnabled={progressiveRampEnabled}
-                transposeSemitones={transposeSemitones}
-                loopEnabled={loopEnabled}
-                loopA={loopA}
-                loopB={loopB}
-                eq={eq}
-                mixer={mixer}
-                transcribingStem={transcribingStem}
-                getFrequencyBins={(out) => engineRef.current?.getFrequencyBins(out) ?? false}
-                onTogglePlay={handleTogglePlay}
-                onSeek={(sec) => engineRef.current?.seek(sec)}
-                onBpmChange={(nextBpm) => {
-                  setBpm(nextBpm);
-                  engineRef.current?.setMetronome(metronomeEnabled, nextBpm);
-                }}
-                onTapTempo={handleTapTempo}
-                onRateChange={(r) => {
-                  setPlaybackRate(r);
-                  engineRef.current?.setPlaybackRate(r);
-                }}
-                onToggleMetronome={() => {
-                  const next = !metronomeEnabled;
-                  setMetronomeEnabled(next);
-                  engineRef.current?.setMetronome(next, bpm);
-                }}
-                onToggleCountIn={() => setCountInEnabled((v) => !v)}
-                onToggleProgressiveRamp={() => setProgressiveRampEnabled((v) => !v)}
-                onTransposeChange={(semi) => {
-                  setTransposeSemitones(semi);
-                  engineRef.current?.setTranspose(semi);
-                }}
-                onLoopToggle={() => {
-                  const next = !loopEnabled;
-                  setLoopEnabled(next);
-                  engineRef.current?.setLoop(next, loopA, loopB);
-                }}
-                onSetLoopA={(sec) => {
-                  setLoopA(sec);
-                  engineRef.current?.setLoop(loopEnabled, sec, loopB);
-                }}
-                onSetLoopB={(sec) => {
-                  setLoopB(sec);
-                  engineRef.current?.setLoop(loopEnabled, loopA, sec);
-                }}
-                onExportLoopSlice={handleExportLoopSlice}
-                onEqChange={(nextEq) => {
-                  setEq(nextEq);
-                  engineRef.current?.setMasterEq(nextEq);
-                }}
-                onApplyMixPreset={handleApplyMixPreset}
-                onMixerChange={handleMixerChange}
-                onTranscribeStem={handleTranscribe}
-              />
-
-            </>
-          )}
-
-          <div className="studio-tabs">
-            <button
-              className={`studio-tab ${studioTab === "falling" ? "active" : ""}`}
-              onClick={() => setStudioTab("falling")}
-            >
-              ✨ 瀑布流
-            </button>
-            <button
-              className={`studio-tab ${studioTab === "instrument" ? "active" : ""}`}
-              onClick={() => setStudioTab("instrument")}
-            >
-              🎹 琴键指板 {capoFret > 0 ? `(C${capoFret})` : ""}
-            </button>
-            <button
-              className={`studio-tab ${studioTab === "coach" ? "active" : ""}`}
-              onClick={() => setStudioTab("coach")}
-            >
-              🎯 调音打分 ({practiceRecords.length})
-            </button>
-            <button
-              className={`studio-tab ${studioTab === "cover" ? "active" : ""}`}
-              onClick={() => setStudioTab("cover")}
-            >
-              🎙️ 叠录翻唱 ({archivedTakes.length})
-            </button>
-            <button
-              className={`studio-tab ${studioTab === "score" ? "active" : ""}`}
-              onClick={() => setStudioTab("score")}
-            >
-              🎼 乐谱 ({transposedNotes.length})
-            </button>
-            <button
-              className={`studio-tab ${studioTab === "drums" ? "active" : ""}`}
-              onClick={() => setStudioTab("drums")}
-            >
-              🥁 鼓组 ({drumHits.length})
-            </button>
-            <button
-              className={`studio-tab ${studioTab === "lyrics" ? "active" : ""}`}
-              onClick={() => setStudioTab("lyrics")}
-            >
-              🎤 歌词 ({lyrics.length})
-            </button>
-          </div>
-
+            {editorOpen && (
+              <div className="editor-body">
           {studioTab === "falling" && (
             <FallingNotesView
               notes={transposedNotes}
@@ -1972,26 +2014,98 @@ export const App: React.FC = () => {
               onExportSrt={handleExportSrt}
             />
           )}
+          {studioTab === "chords" && (
+            <div className="chord-editor">
+              <div className="reharm-row">
+                <span className="reharm-title">风格重配</span>
+                {REHARM_STYLES.map((st) => (
+                  <button
+                    key={st.id}
+                    className={`btn btn-sm ${activeReharmStyle === st.id ? "btn-active" : ""}`}
+                    disabled={chords.length === 0}
+                    onClick={() => handleReharmonize(st.id)}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+                {originalChordsBackup && (
+                  <button className="btn btn-sm" onClick={handleRestoreOriginalChords}>
+                    还原原版
+                  </button>
+                )}
+              </div>
+            <ChordTrack
+              chords={chords}
+              durationSec={audioMeta?.duration_sec ?? 0}
+              currentTime={currentTime}
+              transposeSemitones={transposeSemitones}
+              keyTonic={keyEst?.tonic}
+              keyMode={keyEst?.mode}
+              detecting={detectingChords}
+              onDetectChords={handleDetectChords}
+              onChordsChange={setChords}
+              onSeek={(sec) => engineRef.current?.seek(sec)}
+              onAuditionChord={(sym) => {
+                const pitches = chordToMidiVoicing(sym, 4);
+                pitches.forEach((p, idx) => {
+                  window.setTimeout(() => {
+                    engineRef.current?.playSingleNote(p, 0.75, 86);
+                  }, idx * 35);
+                });
+              }}
+            />
+            </div>
+          )}
+
+          {studioTab === "mixer" && (
+            <MixerPanel
+              hasStems={stems.length > 0}
+              isPlaying={isPlaying}
+              eq={eq}
+              reverbPreset={reverbPreset}
+              reverbWet={reverbWet}
+              getMasterPeak={() => engineRef.current?.getMasterPeakLevel() ?? 0}
+              getFrequencyBins={(out) => engineRef.current?.getFrequencyBins(out) ?? false}
+              onApplyMixPreset={handleApplyMixPreset}
+              onEqChange={(nextEq) => {
+                setEq(nextEq);
+                engineRef.current?.setMasterEq(nextEq);
+              }}
+              onReverbChange={handleReverbChange}
+            />
+          )}
+              </div>
+            )}
+          </div>
         </section>
 
-        {!focusMode && (
-          <aside className="side-pane">
-            <AiAssistantPanel
-              config={relayConfig}
-              onConfigChange={updateRelayConfig}
-              hasAudio={Boolean(audioMeta)}
-              loopEnabled={loopEnabled}
-              loopA={loopA}
-              loopB={loopB}
-              notes={transposedNotes}
-              loading={llmLoading}
-              analysis={analysis}
-              refineSummary={refineSummary}
-              fingeringTips={fingeringTips}
-              onTestRelay={() => testLlmRelayConnection(relayConfig)}
-              onAnalyzeArrangement={handleAnalyzeArrangement}
-              onRefineMidi={handleRefineMidi}
-            />
+        {aiPanelOpen && (
+          <aside className="inspector">
+            <div className="inspector-header">
+              <span>
+                <Bot size={14} /> AI 助手
+              </span>
+              <button className="icon-btn" onClick={() => setAiPanelOpen(false)} title="关闭">
+                <ChevronDown size={14} style={{ transform: "rotate(-90deg)" }} />
+              </button>
+            </div>
+            <div className="inspector-body">
+              <AiAssistantPanel
+                configured={Boolean(relayConfig.base_url.trim() && relayConfig.api_key.trim())}
+                onOpenSettings={() => openSettings("ai")}
+                hasAudio={Boolean(audioMeta)}
+                loopEnabled={loopEnabled}
+                loopA={loopA}
+                loopB={loopB}
+                notes={transposedNotes}
+                loading={llmLoading}
+                analysis={analysis}
+                refineSummary={refineSummary}
+                fingeringTips={fingeringTips}
+                onAnalyzeArrangement={handleAnalyzeArrangement}
+                onRefineMidi={handleRefineMidi}
+              />
+            </div>
           </aside>
         )}
       </main>
@@ -1999,9 +2113,28 @@ export const App: React.FC = () => {
       <footer className="statusbar">
         <span className="statusbar-msg" title={statusMsg}>{statusMsg}</span>
         <span className="statusbar-meta">
-          {audioMeta ? audioMeta.file_name : "未加载音频"} · v0.9.15
+          {modelStatus?.coreml_enabled ? "CoreML" : "CPU"} · v0.9.15
         </span>
       </footer>
+
+      <SettingsModal
+        open={showSettings}
+        initialSection={settingsSection}
+        appVersion="0.9.15"
+        theme={theme}
+        themeLabels={THEME_LABELS}
+        relayConfig={relayConfig}
+        modelStatus={modelStatus}
+        midiDevices={midiDevices}
+        onClose={() => setShowSettings(false)}
+        onThemeChange={applyTheme}
+        onRelayConfigChange={updateRelayConfig}
+        onTestRelay={() => testLlmRelayConnection(relayConfig)}
+        onOpenModelManager={() => setShowModelModal(true)}
+        onConnectMidi={handleConnectMidi}
+        onOpenDiagnostics={() => setShowDiagnosticsModal(true)}
+        onOpenShortcuts={() => setShowShortcutsModal(true)}
+      />
 
       <StageModeOverlay
         open={stageModeOpen}

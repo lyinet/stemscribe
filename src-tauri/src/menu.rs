@@ -1,7 +1,22 @@
-use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{App, Emitter, Runtime};
 
 pub fn setup_macos_menu<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
+    let open_settings = MenuItemBuilder::with_id("open_settings", "设置...")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)?;
+    let app_menu = SubmenuBuilder::new(app, "StemScribe")
+        .item(&PredefinedMenuItem::about(app, Some("关于 StemScribe"), None)?)
+        .separator()
+        .item(&open_settings)
+        .separator()
+        .item(&PredefinedMenuItem::hide(app, Some("隐藏 StemScribe"))?)
+        .item(&PredefinedMenuItem::hide_others(app, Some("隐藏其他"))?)
+        .item(&PredefinedMenuItem::show_all(app, Some("全部显示"))?)
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, Some("退出 StemScribe"))?)
+        .build()?;
+
     let open_audio = MenuItemBuilder::with_id("open_audio", "导入音频...")
         .accelerator("CmdOrCtrl+O")
         .build(app)?;
@@ -56,12 +71,17 @@ pub fn setup_macos_menu<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
         .accelerator("CmdOrCtrl+Shift+Z")
         .build(app)?;
     let quantize = MenuItemBuilder::with_id("quantize", "1/16 拍节奏量化")
-        .accelerator("CmdOrCtrl+Q")
+        .accelerator("CmdOrCtrl+U")
         .build(app)?;
 
     let edit_menu = SubmenuBuilder::new(app, "编辑")
         .item(&undo)
         .item(&redo)
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, Some("剪切"))?)
+        .item(&PredefinedMenuItem::copy(app, Some("拷贝"))?)
+        .item(&PredefinedMenuItem::paste(app, Some("粘贴"))?)
+        .item(&PredefinedMenuItem::select_all(app, Some("全选"))?)
         .separator()
         .item(&quantize)
         .build()?;
@@ -92,11 +112,18 @@ pub fn setup_macos_menu<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
         .item(&model_manager)
         .build()?;
 
+    let window_menu = SubmenuBuilder::new(app, "窗口")
+        .item(&PredefinedMenuItem::minimize(app, Some("最小化"))?)
+        .item(&PredefinedMenuItem::fullscreen(app, Some("进入全屏"))?)
+        .build()?;
+
     let menu: Menu<R> = MenuBuilder::new(app)
+        .item(&app_menu)
         .item(&file_menu)
         .item(&edit_menu)
         .item(&playback_menu)
         .item(&tools_menu)
+        .item(&window_menu)
         .build()?;
 
     app.set_menu(menu)?;
