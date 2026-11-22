@@ -14,7 +14,7 @@ permissions:
 jobs:
   build-macos-arm64:
     name: macOS Apple Silicon (verify + tsc + cargo test + .dmg)
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 35
 
     steps:
