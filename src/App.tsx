@@ -13,6 +13,7 @@ import {
   ListMusic,
   ListOrdered,
   Maximize2,
+  MoreHorizontal,
   Package,
   Palette,
   PanelRightClose,
@@ -244,7 +245,7 @@ export const App: React.FC = () => {
   const [transcribingStem, setTranscribingStem] = useState<string | null>(null);
   const [llmLoading, setLlmLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState(
-    "StemScribe v0.9.14 就绪 — 已新增 MacBook 电脑键盘弹琴模式与智能曲式一键转书签"
+    "StemScribe v0.9.15 就绪 — 修复构建并完成 macOS 整包签名，可直接从 GitHub Releases 下载安装"
   );
 
   const [relayConfig, setRelayConfig] = useState<LlmRelayConfig>(() => {
@@ -1485,9 +1486,9 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-shell" data-theme={theme}>
-      <header className="topbar">
-        <div className="topbar-left">
-          <span className="brand">StemScribe 0.9.14</span>
+      <header className="topbar" data-tauri-drag-region>
+        <div className="topbar-left" data-tauri-drag-region>
+          <span className="brand" data-tauri-drag-region>StemScribe</span>
           <span className={`badge ${modelStatus?.coreml_enabled ? "ok" : ""}`}>
             <Cpu size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
             {modelStatus?.coreml_enabled ? "CoreML" : "CPU"}
@@ -1501,136 +1502,107 @@ export const App: React.FC = () => {
           {tempoInfo && (
             <span className="badge">
               <Activity size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
-              {tempoInfo.bpm.toFixed(1)} BPM · Peak {tempoInfo.peak_dbfs.toFixed(1)}dB
+              {tempoInfo.bpm.toFixed(1)} BPM
             </span>
           )}
-          <span className="muted">{statusMsg}</span>
         </div>
 
         <div className="topbar-right">
-          <button className="btn" onClick={() => setShowCommandPalette(true)} title="全局快捷命令面板 (Cmd+K)">
-            <Search size={13} /> ⌘K
-          </button>
-          <button
-            className="btn"
-            onClick={handleCycleTheme}
-            title={`切换视觉主题（当前：${THEME_LABELS[theme]}）`}
-          >
-            <Palette size={14} />
-          </button>
-          <button
-            className={`btn ${focusMode ? "btn-active" : ""}`}
-            onClick={() => setFocusMode((v) => !v)}
-            title={focusMode ? "展开右侧 AI 编曲助手栏" : "专注模式：收起右侧栏获得全宽画布"}
-          >
-            {focusMode ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
-          </button>
-          <button
-            className="btn"
-            onClick={() => setShowDiagnosticsModal(true)}
-            title="系统诊断与运行环境自检"
-          >
-            <Activity size={14} />
-          </button>
-          <button
-            className="btn"
-            onClick={() => setShowShortcutsModal(true)}
-            title="快捷键速查 (?)"
-          >
-            <HelpCircle size={14} />
-          </button>
-          <button
-            className="btn"
-            disabled={!audioMeta}
-            onClick={() => setShowLeadSheetModal(true)}
-            title="A4 吉他弹唱和弦谱排版 / 打印 (Cmd+P)"
-          >
-            <FileText size={14} /> 弹唱谱
-          </button>
-          <button
-            className="btn"
-            onClick={() => setShowProjectLibrary(true)}
-            title="本地扒带工程库（搜索 / 重命名 / 删除）"
-          >
-            <FolderOpen size={14} /> 工程库 ({recentProjects.length})
-          </button>
-          <button
-            className="btn"
-            onClick={() => setShowSetlistModal(true)}
-            title="演出歌单 / 练琴曲单 Setlist (Cmd+L)"
-          >
-            <ListOrdered size={14} /> 歌单 ({setlists.length})
-          </button>
-          <button
-            className="btn"
-            disabled={!audioMeta}
-            onClick={() => setShowShareModal(true)}
-            title="导出小红书/B站高清扒带分享卡片"
-          >
-            <Share2 size={14} /> 分享图
-          </button>
-          <button
-            className="btn"
-            disabled={!audioMeta}
-            onClick={() => setStageModeOpen(true)}
-            title="全屏演出提词器模式 (F)"
-          >
-            <Maximize2 size={14} /> 演出
-          </button>
-          <button className="btn" onClick={() => setShowBatchModal(true)} title="Cmd+B">
-            <ListMusic size={14} /> 批量
-          </button>
-          <button className="btn" onClick={() => setShowModelModal(true)}>
-            <HardDrive size={14} /> 模型
-          </button>
-          <button className="btn" disabled={!audioMeta} onClick={handleExportBundle}>
-            <Package size={14} /> 资料包
-          </button>
-          <button className="btn" disabled={stems.length === 0} onClick={handleExportMixedWav}>
-            <Download size={14} /> 混音
-          </button>
+          <div className="icon-group">
+            <button className="btn btn-icon" onClick={() => setShowCommandPalette(true)} title="全局快捷命令面板 (Cmd+K)">
+              <Search size={14} />
+            </button>
+            <button
+              className="btn btn-icon"
+              onClick={handleCycleTheme}
+              title={`切换视觉主题（当前：${THEME_LABELS[theme]}）`}
+            >
+              <Palette size={14} />
+            </button>
+            <button
+              className={`btn btn-icon ${focusMode ? "btn-active" : ""}`}
+              onClick={() => setFocusMode((v) => !v)}
+              title={focusMode ? "展开右侧 AI 编曲助手栏" : "专注模式：收起右侧栏获得全宽画布"}
+            >
+              {focusMode ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
+            </button>
+            <button className="btn btn-icon" onClick={() => setShowDiagnosticsModal(true)} title="系统诊断与运行环境自检">
+              <Cpu size={14} />
+            </button>
+            <button className="btn btn-icon" onClick={() => setShowShortcutsModal(true)} title="快捷键速查 (?)">
+              <HelpCircle size={14} />
+            </button>
+          </div>
 
-          <div style={{ position: "relative" }}>
-            <button className="btn" onClick={() => setShowProjectsMenu((v) => !v)}>
-              <History size={14} /> ({recentProjects.length})
+          <div className="menu-anchor">
+            <button
+              className={`btn ${showProjectsMenu ? "btn-active" : ""}`}
+              onClick={() => setShowProjectsMenu((v) => !v)}
+              title="更多工具：工程库、歌单、导出、模型管理等"
+            >
+              <MoreHorizontal size={14} /> 更多
             </button>
             {showProjectsMenu && (
-              <div
-                className="card"
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: 38,
-                  width: 260,
-                  zIndex: 50,
-                  boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
-                }}
-              >
-                <div className="muted" style={{ marginBottom: 8 }}>已保存工程</div>
-                {recentProjects.length === 0 ? (
-                  <div className="muted">暂无保存记录</div>
-                ) : (
-                  recentProjects.map((p) => (
-                    <button
-                      key={p.id}
-                      className="btn btn-sm"
-                      style={{ width: "100%", justifyContent: "space-between", marginBottom: 6 }}
-                      onClick={() => handleLoadProject(p.id)}
-                    >
-                      <span>{p.name}</span>
-                      <span className="muted">{p.note_count} 音符</span>
-                    </button>
-                  ))
-                )}
-              </div>
+              <>
+                <div className="menu-backdrop" onClick={() => setShowProjectsMenu(false)} />
+                <div className="menu-pop">
+                  {(
+                    [
+                      { icon: <FolderOpen size={14} />, label: `工程库 (${recentProjects.length})`, hint: "", onClick: () => setShowProjectLibrary(true) },
+                      { icon: <ListOrdered size={14} />, label: `演出歌单 (${setlists.length})`, hint: "⌘L", onClick: () => setShowSetlistModal(true) },
+                      { icon: <ListMusic size={14} />, label: "批量处理", hint: "⌘B", onClick: () => setShowBatchModal(true) },
+                      { icon: <HardDrive size={14} />, label: "模型管理", hint: "", onClick: () => setShowModelModal(true) },
+                      null,
+                      { icon: <FileText size={14} />, label: "弹唱谱排版 / 打印", hint: "⌘P", disabled: !audioMeta, onClick: () => setShowLeadSheetModal(true) },
+                      { icon: <Maximize2 size={14} />, label: "演出提词器", hint: "F", disabled: !audioMeta, onClick: () => setStageModeOpen(true) },
+                      { icon: <Share2 size={14} />, label: "导出分享图", hint: "", disabled: !audioMeta, onClick: () => setShowShareModal(true) },
+                      { icon: <Package size={14} />, label: "导出练习资料包", hint: "", disabled: !audioMeta, onClick: handleExportBundle },
+                      { icon: <Download size={14} />, label: "导出混音 WAV", hint: "", disabled: stems.length === 0, onClick: handleExportMixedWav },
+                    ] as Array<{ icon: React.ReactNode; label: string; hint: string; disabled?: boolean; onClick: () => void } | null>
+                  ).map((item, idx) =>
+                    item === null ? (
+                      <div key={`sep_${idx}`} className="menu-sep" />
+                    ) : (
+                      <button
+                        key={item.label}
+                        className="menu-item"
+                        disabled={item.disabled}
+                        onClick={() => {
+                          setShowProjectsMenu(false);
+                          item.onClick();
+                        }}
+                      >
+                        {item.icon}
+                        <span className="menu-label">{item.label}</span>
+                        {item.hint && <span className="menu-hint">{item.hint}</span>}
+                      </button>
+                    )
+                  )}
+                  {recentProjects.length > 0 && (
+                    <>
+                      <div className="menu-sep" />
+                      <div className="menu-heading">最近工程</div>
+                      {recentProjects.slice(0, 5).map((p) => (
+                        <button key={p.id} className="menu-item" onClick={() => handleLoadProject(p.id)}>
+                          <History size={14} />
+                          <span className="menu-label">{p.name}</span>
+                          <span className="menu-hint">{p.note_count} 音符</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
-          <button className="btn" disabled={!audioMeta} onClick={handleSaveProject} title="Cmd+S">
-            <Save size={14} /> 保存
-          </button>
+          <div className="toolbar-divider" />
+
           <button className="btn" onClick={handleOpenAudio} title="Cmd+O">
             <FolderOpen size={14} /> 导入
+          </button>
+          <button className="btn" disabled={!audioMeta} onClick={handleSaveProject} title="Cmd+S">
+            <Save size={14} /> 保存
           </button>
           <button
             className="btn"
@@ -1658,7 +1630,7 @@ export const App: React.FC = () => {
               <div style={{ maxWidth: 680 }}>
                 <div className="badge ok" style={{ display: "inline-flex", marginBottom: 10 }}>
                   <Sparkles size={12} style={{ marginRight: 5 }} />
-                  Apple Silicon 原生 AI 音乐扒带、成品翻唱合轨 & 舞台工作站 (v0.9.14 Preview)
+                  Apple Silicon 原生 AI 音乐扒带、成品翻唱合轨 & 舞台工作站 (v0.9.15 Preview)
                 </div>
                 <h2 style={{ margin: "0 0 8px", fontSize: 24, letterSpacing: -0.3 }}>
                   把任何一首歌，1 分钟拆解成可弹、可录、可合轨发布的完整工程
@@ -1681,140 +1653,145 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          <SongStructureBar
-            segments={structure}
-            durationSec={audioMeta?.duration_sec ?? 0}
-            currentTime={currentTime}
-            detecting={detectingStructure}
-            hasAudio={Boolean(audioMeta)}
-            onDetectStructure={handleDetectStructure}
-            onSeek={(sec) => engineRef.current?.seek(sec)}
-            onLoopSection={(seg) => {
-              setLoopA(seg.start_sec);
-              setLoopB(seg.end_sec);
-              setLoopEnabled(true);
-              engineRef.current?.setLoop(true, seg.start_sec, seg.end_sec);
-              engineRef.current?.seek(seg.start_sec);
-              setStatusMsg(`已锁定 A-B 循环到「${seg.label}」(${seg.start_sec.toFixed(1)}s - ${seg.end_sec.toFixed(1)}s)`);
-            }}
-            onConvertToMarkers={(segs) => {
-              const converted = segs.map((s) => ({
-                id: `mk_sec_${s.id}_${Math.round(s.start_sec * 10)}`,
-                time_sec: s.start_sec,
-                label: s.label,
-              }));
-              setMarkers(converted);
-              setStatusMsg(`已将 ${converted.length} 个识别段落一键转为工程书签。`);
-            }}
-          />
+          {audioMeta && (
+            <>
+              <SongStructureBar
+                segments={structure}
+                durationSec={audioMeta?.duration_sec ?? 0}
+                currentTime={currentTime}
+                detecting={detectingStructure}
+                hasAudio={Boolean(audioMeta)}
+                onDetectStructure={handleDetectStructure}
+                onSeek={(sec) => engineRef.current?.seek(sec)}
+                onLoopSection={(seg) => {
+                  setLoopA(seg.start_sec);
+                  setLoopB(seg.end_sec);
+                  setLoopEnabled(true);
+                  engineRef.current?.setLoop(true, seg.start_sec, seg.end_sec);
+                  engineRef.current?.seek(seg.start_sec);
+                  setStatusMsg(`已锁定 A-B 循环到「${seg.label}」(${seg.start_sec.toFixed(1)}s - ${seg.end_sec.toFixed(1)}s)`);
+                }}
+                onConvertToMarkers={(segs) => {
+                  const converted = segs.map((s) => ({
+                    id: `mk_sec_${s.id}_${Math.round(s.start_sec * 10)}`,
+                    time_sec: s.start_sec,
+                    label: s.label,
+                  }));
+                  setMarkers(converted);
+                  setStatusMsg(`已将 ${converted.length} 个识别段落一键转为工程书签。`);
+                }}
+              />
 
-          <StudioFxBar
-            hasChords={chords.length > 0}
-            canRestoreChords={Boolean(originalChordsBackup)}
-            activeReharmStyle={activeReharmStyle}
-            reverbPreset={reverbPreset}
-            reverbWet={reverbWet}
-            isPlaying={isPlaying}
-            getMasterPeak={() => engineRef.current?.getMasterPeakLevel() ?? 0}
-            onReharmonize={handleReharmonize}
-            onRestoreOriginalChords={handleRestoreOriginalChords}
-            onReverbChange={handleReverbChange}
-          />
+              <StudioFxBar
+                hasChords={chords.length > 0}
+                canRestoreChords={Boolean(originalChordsBackup)}
+                activeReharmStyle={activeReharmStyle}
+                reverbPreset={reverbPreset}
+                reverbWet={reverbWet}
+                isPlaying={isPlaying}
+                getMasterPeak={() => engineRef.current?.getMasterPeakLevel() ?? 0}
+                onReharmonize={handleReharmonize}
+                onRestoreOriginalChords={handleRestoreOriginalChords}
+                onReverbChange={handleReverbChange}
+              />
 
-          <CueMarkerBar
-            markers={markers}
-            currentTime={currentTime}
-            durationSec={audioMeta?.duration_sec ?? 0}
-            hasAudio={Boolean(audioMeta)}
-            onAddMarker={handleAddMarker}
-            onDeleteMarker={(id) => setMarkers((prev) => prev.filter((m) => m.id !== id))}
-            onSeek={(sec) => engineRef.current?.seek(sec)}
-            onLoopSection={handleLoopMarkerSection}
-          />
+              <CueMarkerBar
+                markers={markers}
+                currentTime={currentTime}
+                durationSec={audioMeta?.duration_sec ?? 0}
+                hasAudio={Boolean(audioMeta)}
+                onAddMarker={handleAddMarker}
+                onDeleteMarker={(id) => setMarkers((prev) => prev.filter((m) => m.id !== id))}
+                onSeek={(sec) => engineRef.current?.seek(sec)}
+                onLoopSection={handleLoopMarkerSection}
+              />
 
-          <ChordTrack
-            chords={chords}
-            durationSec={audioMeta?.duration_sec ?? 0}
-            currentTime={currentTime}
-            transposeSemitones={transposeSemitones}
-            keyTonic={keyEst?.tonic}
-            keyMode={keyEst?.mode}
-            detecting={detectingChords}
-            onDetectChords={handleDetectChords}
-            onChordsChange={setChords}
-            onSeek={(sec) => engineRef.current?.seek(sec)}
-            onAuditionChord={(sym) => {
-              const pitches = chordToMidiVoicing(sym, 4);
-              pitches.forEach((p, idx) => {
-                window.setTimeout(() => {
-                  engineRef.current?.playSingleNote(p, 0.75, 86);
-                }, idx * 35);
-              });
-            }}
-          />
+              <ChordTrack
+                chords={chords}
+                durationSec={audioMeta?.duration_sec ?? 0}
+                currentTime={currentTime}
+                transposeSemitones={transposeSemitones}
+                keyTonic={keyEst?.tonic}
+                keyMode={keyEst?.mode}
+                detecting={detectingChords}
+                onDetectChords={handleDetectChords}
+                onChordsChange={setChords}
+                onSeek={(sec) => engineRef.current?.seek(sec)}
+                onAuditionChord={(sym) => {
+                  const pitches = chordToMidiVoicing(sym, 4);
+                  pitches.forEach((p, idx) => {
+                    window.setTimeout(() => {
+                      engineRef.current?.playSingleNote(p, 0.75, 86);
+                    }, idx * 35);
+                  });
+                }}
+              />
 
-          <WaveformPlayer
-            stems={stems}
-            durationSec={audioMeta?.duration_sec ?? 0}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            bpm={bpm}
-            playbackRate={playbackRate}
-            metronomeEnabled={metronomeEnabled}
-            countInEnabled={countInEnabled}
-            progressiveRampEnabled={progressiveRampEnabled}
-            transposeSemitones={transposeSemitones}
-            loopEnabled={loopEnabled}
-            loopA={loopA}
-            loopB={loopB}
-            eq={eq}
-            mixer={mixer}
-            transcribingStem={transcribingStem}
-            getFrequencyBins={(out) => engineRef.current?.getFrequencyBins(out) ?? false}
-            onTogglePlay={handleTogglePlay}
-            onSeek={(sec) => engineRef.current?.seek(sec)}
-            onBpmChange={(nextBpm) => {
-              setBpm(nextBpm);
-              engineRef.current?.setMetronome(metronomeEnabled, nextBpm);
-            }}
-            onTapTempo={handleTapTempo}
-            onRateChange={(r) => {
-              setPlaybackRate(r);
-              engineRef.current?.setPlaybackRate(r);
-            }}
-            onToggleMetronome={() => {
-              const next = !metronomeEnabled;
-              setMetronomeEnabled(next);
-              engineRef.current?.setMetronome(next, bpm);
-            }}
-            onToggleCountIn={() => setCountInEnabled((v) => !v)}
-            onToggleProgressiveRamp={() => setProgressiveRampEnabled((v) => !v)}
-            onTransposeChange={(semi) => {
-              setTransposeSemitones(semi);
-              engineRef.current?.setTranspose(semi);
-            }}
-            onLoopToggle={() => {
-              const next = !loopEnabled;
-              setLoopEnabled(next);
-              engineRef.current?.setLoop(next, loopA, loopB);
-            }}
-            onSetLoopA={(sec) => {
-              setLoopA(sec);
-              engineRef.current?.setLoop(loopEnabled, sec, loopB);
-            }}
-            onSetLoopB={(sec) => {
-              setLoopB(sec);
-              engineRef.current?.setLoop(loopEnabled, loopA, sec);
-            }}
-            onExportLoopSlice={handleExportLoopSlice}
-            onEqChange={(nextEq) => {
-              setEq(nextEq);
-              engineRef.current?.setMasterEq(nextEq);
-            }}
-            onApplyMixPreset={handleApplyMixPreset}
-            onMixerChange={handleMixerChange}
-            onTranscribeStem={handleTranscribe}
-          />
+              <WaveformPlayer
+                stems={stems}
+                durationSec={audioMeta?.duration_sec ?? 0}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                bpm={bpm}
+                playbackRate={playbackRate}
+                metronomeEnabled={metronomeEnabled}
+                countInEnabled={countInEnabled}
+                progressiveRampEnabled={progressiveRampEnabled}
+                transposeSemitones={transposeSemitones}
+                loopEnabled={loopEnabled}
+                loopA={loopA}
+                loopB={loopB}
+                eq={eq}
+                mixer={mixer}
+                transcribingStem={transcribingStem}
+                getFrequencyBins={(out) => engineRef.current?.getFrequencyBins(out) ?? false}
+                onTogglePlay={handleTogglePlay}
+                onSeek={(sec) => engineRef.current?.seek(sec)}
+                onBpmChange={(nextBpm) => {
+                  setBpm(nextBpm);
+                  engineRef.current?.setMetronome(metronomeEnabled, nextBpm);
+                }}
+                onTapTempo={handleTapTempo}
+                onRateChange={(r) => {
+                  setPlaybackRate(r);
+                  engineRef.current?.setPlaybackRate(r);
+                }}
+                onToggleMetronome={() => {
+                  const next = !metronomeEnabled;
+                  setMetronomeEnabled(next);
+                  engineRef.current?.setMetronome(next, bpm);
+                }}
+                onToggleCountIn={() => setCountInEnabled((v) => !v)}
+                onToggleProgressiveRamp={() => setProgressiveRampEnabled((v) => !v)}
+                onTransposeChange={(semi) => {
+                  setTransposeSemitones(semi);
+                  engineRef.current?.setTranspose(semi);
+                }}
+                onLoopToggle={() => {
+                  const next = !loopEnabled;
+                  setLoopEnabled(next);
+                  engineRef.current?.setLoop(next, loopA, loopB);
+                }}
+                onSetLoopA={(sec) => {
+                  setLoopA(sec);
+                  engineRef.current?.setLoop(loopEnabled, sec, loopB);
+                }}
+                onSetLoopB={(sec) => {
+                  setLoopB(sec);
+                  engineRef.current?.setLoop(loopEnabled, loopA, sec);
+                }}
+                onExportLoopSlice={handleExportLoopSlice}
+                onEqChange={(nextEq) => {
+                  setEq(nextEq);
+                  engineRef.current?.setMasterEq(nextEq);
+                }}
+                onApplyMixPreset={handleApplyMixPreset}
+                onMixerChange={handleMixerChange}
+                onTranscribeStem={handleTranscribe}
+              />
+
+            </>
+          )}
 
           <div className="studio-tabs">
             <button
@@ -2018,6 +1995,13 @@ export const App: React.FC = () => {
           </aside>
         )}
       </main>
+
+      <footer className="statusbar">
+        <span className="statusbar-msg" title={statusMsg}>{statusMsg}</span>
+        <span className="statusbar-meta">
+          {audioMeta ? audioMeta.file_name : "未加载音频"} · v0.9.15
+        </span>
+      </footer>
 
       <StageModeOverlay
         open={stageModeOpen}

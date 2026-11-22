@@ -70,9 +70,9 @@ jobs:
             ## 下载安装（macOS 13+，Apple Silicon M1/M2/M3/M4）
 
             1. 下载下方 `StemScribe_*_aarch64.dmg`，打开后把 StemScribe 拖入「应用程序」。
-            2. 当前为未签名预发布版，首次打开若提示「已损坏」或「无法验证开发者」，在终端执行：
-               `xattr -cr /Applications/StemScribe.app`
-               或在「应用程序」中右键 StemScribe →「打开」。
+            2. 当前为 ad-hoc 签名预发布版（未经 Apple 公证），首次打开会被拦截：
+               打开「系统设置 → 隐私与安全性」，在底部点「仍要打开」；
+               或在终端执行 `xattr -d com.apple.quarantine /Applications/StemScribe.app`
             3. AI 分轨 / 扒谱需要 ONNX 模型，可在应用内「模型管理」下载或导入。
           files: |
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg

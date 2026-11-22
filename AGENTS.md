@@ -21,3 +21,6 @@
 - 新增原生菜单项：`menu.rs` 的 id 必须在 `App.tsx` 中有对应 `case "<id>":`。
 - 发版需同步三处版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`（保持 `0.x.y` 预发布序列）。
 - 模型目录：`~/Library/Application Support/StemScribe/models/`（`htdemucs.onnx`、`basic_pitch.onnx`，已被 .gitignore 忽略）。
+- 本地打包 `npm run build:mac` 时 Tauri 会调用 `xattr -cr`；若 PATH 中 miniconda 的 `xattr` 抢先（不支持 `-r`），用 `PATH=/usr/bin:$PATH npm run build:mac`。
+- 窗口使用 Overlay 标题栏：可拖动区域靠 `data-tauri-drag-region` 属性 + capability `core:window:allow-start-dragging`（`-webkit-app-region` 在 Tauri 中无效）。
+- macOS 包为 ad-hoc 签名（`signingIdentity: "-"`，hardened runtime + `Entitlements.plist` 麦克风权限），未公证。
