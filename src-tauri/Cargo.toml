@@ -1,7 +1,8 @@
 [package]
 name = "stemscribe"
-version = "0.9.15"
+version = "0.9.16"
 description = "StemScribe — macOS Apple Silicon AI Music Transcription, Cover Studio & Stage Workstation"
+license = "MIT"
 authors = ["StemScribe"]
 edition = "2021"
 
