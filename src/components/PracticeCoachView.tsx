@@ -10,6 +10,7 @@ interface Props {
   currentTime: number;
   playbackRate: number;
   transposeSemitones: number;
+  useFlats?: boolean;
   notes: MidiNote[];
   chords: ChordEvent[];
   records: PracticeRecord[];
@@ -35,6 +36,7 @@ export const PracticeCoachView: React.FC<Props> = ({
   currentTime,
   playbackRate,
   transposeSemitones,
+  useFlats,
   notes,
   chords,
   records,
@@ -74,11 +76,11 @@ export const PracticeCoachView: React.FC<Props> = ({
     const s = new Set<number>();
     if (activeNote) s.add(((activeNote.pitch % 12) + 12) % 12);
     if (activeChord) {
-      const sym = transposeChordSymbol(activeChord.symbol, transposeSemitones);
+      const sym = transposeChordSymbol(activeChord.symbol, transposeSemitones, useFlats);
       for (const pc of chordToPitchClasses(sym)) s.add(pc);
     }
     return s;
-  }, [activeNote, activeChord, transposeSemitones]);
+  }, [activeNote, activeChord, transposeSemitones, useFlats]);
 
   useEffect(() => {
     return () => {

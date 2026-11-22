@@ -9,6 +9,7 @@ interface Props {
   bpm: number;
   keyEst: KeyEstimate | null;
   transposeSemitones: number;
+  useFlats?: boolean;
   capoFret: number;
   chords: ChordEvent[];
   structure: SongStructureSegment[];
@@ -24,6 +25,7 @@ export const ShareCardModal: React.FC<Props> = ({
   bpm,
   keyEst,
   transposeSemitones,
+  useFlats,
   capoFret,
   chords,
   structure,
@@ -72,7 +74,7 @@ export const ShareCardModal: React.FC<Props> = ({
     ctx.fillText(cleanTitle.slice(0, 24), 72, 194);
 
     // Metadata pills
-    const topCapo = recommendCapoFrets(chords, transposeSemitones)[0];
+    const topCapo = recommendCapoFrets(chords, transposeSemitones, useFlats)[0];
     const metaLine = [
       `调性 ${keyEst?.label ?? "待识别"}`,
       `${bpm.toFixed(0)} BPM`,
@@ -125,8 +127,8 @@ export const ShareCardModal: React.FC<Props> = ({
       const row = Math.floor(idx / cols);
       const x = 72 + col * (cardW + 18);
       const y = chordY + 26 + row * (cardH + 16);
-      const sounding = transposeChordSymbol(ch.symbol, transposeSemitones);
-      const shown = capoFret > 0 ? transposeChordSymbol(sounding, -capoFret) : sounding;
+      const sounding = transposeChordSymbol(ch.symbol, transposeSemitones, useFlats);
+      const shown = capoFret > 0 ? transposeChordSymbol(sounding, -capoFret, useFlats) : sounding;
 
       ctx.fillStyle = "rgba(30, 41, 59, 0.85)";
       ctx.fillRect(x, y, cardW, cardH);

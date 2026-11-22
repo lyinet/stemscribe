@@ -1,6 +1,8 @@
 import type { ChordEvent } from "../types/music";
 
 export const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+export const NOTE_NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const NOTE_NAMES_NEUTRAL = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 
 export interface GuitarTuningPreset {
   id: string;
@@ -58,11 +60,34 @@ export function parseChordSymbol(symbol: string): { rootPc: number; suffix: stri
   return { rootPc: pc, suffix: m[3] || "" };
 }
 
-export function transposeChordSymbol(symbol: string, semitones: number): string {
+export function transposeChordSymbol(
+  symbol: string,
+  semitones: number,
+  useFlats?: boolean
+): string {
   const parsed = parseChordSymbol(symbol);
   if (!parsed) return symbol;
   const nextPc = (parsed.rootPc + semitones + 120) % 12;
-  return `${NOTE_NAMES_SHARP[nextPc]}${parsed.suffix}`;
+  const names =
+    useFlats === true ? NOTE_NAMES_FLAT : useFlats === false ? NOTE_NAMES_SHARP : NOTE_NAMES_NEUTRAL;
+  return `${names[nextPc]}${parsed.suffix}`;
+}
+
+const FLAT_MAJOR_TONICS = new Set([5, 10, 3, 8, 1, 6]); // F Bb Eb Ab Db Gb
+const FLAT_MINOR_TONICS = new Set([2, 7, 0, 5, 10, 3]); // D G C F Bb Eb
+
+/**
+ * Whether a key signature prefers flat spellings.
+ * Returns null for neutral keys (C major / A minor) — treat as `undefined`.
+ */
+export function keyPrefersFlats(tonicPc: number, isMinor: boolean): boolean | null {
+  const pc = ((tonicPc % 12) + 12) % 12;
+  if (isMinor) {
+    if (pc === 9) return null;
+    return FLAT_MINOR_TONICS.has(pc);
+  }
+  if (pc === 0) return null;
+  return FLAT_MAJOR_TONICS.has(pc);
 }
 
 export function chordToPitchClasses(symbol: string): number[] {
@@ -147,10 +172,11 @@ export interface CapoRecommendation {
  */
 export function recommendCapoFrets(
   chords: ChordEvent[],
-  transposeSemitones = 0
+  transposeSemitones = 0,
+  useFlats?: boolean
 ): CapoRecommendation[] {
   const uniqueSymbols = Array.from(
-    new Set(chords.map((c) => transposeChordSymbol(c.symbol, transposeSemitones)))
+    new Set(chords.map((c) => transposeChordSymbol(c.symbol, transposeSemitones, useFlats)))
   );
   if (uniqueSymbols.length === 0) {
     return [{ fret: 0, friendlyRatio: 1, sampleShapes: [], label: "原调不夹 (0品)" }];
@@ -158,7 +184,7 @@ export function recommendCapoFrets(
 
   const results: CapoRecommendation[] = [];
   for (let fret = 0; fret <= 7; fret++) {
-    const shapes = uniqueSymbols.map((sym) => transposeChordSymbol(sym, -fret));
+    const shapes = uniqueSymbols.map((sym) => transposeChordSymbol(sym, -fret, useFlats));
     const friendly = shapes.filter((sh) => OPEN_FRIENDLY_CHORDS.has(sh)).length;
     const ratio = friendly / shapes.length;
     results.push({

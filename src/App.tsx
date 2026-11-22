@@ -54,7 +54,7 @@ import {
   type SynthTimbre,
 } from "./lib/audioEngine";
 import { createDemoStudioBundle } from "./lib/demoStudio";
-import { chordToMidiVoicing } from "./lib/musicTheory";
+import { chordToMidiVoicing, keyPrefersFlats, parseChordSymbol } from "./lib/musicTheory";
 import {
   analyzeArrangementWithLlm,
   askConfirm,
@@ -603,6 +603,14 @@ export const App: React.FC = () => {
   const transposedScale = useMemo(() => {
     if (!keyEst) return undefined;
     return keyEst.scale_pitch_classes.map((pc) => (pc + transposeSemitones + 120) % 12);
+  }, [keyEst, transposeSemitones]);
+
+  const useFlats = useMemo(() => {
+    if (!keyEst) return undefined;
+    const tonic = parseChordSymbol(keyEst.tonic);
+    if (!tonic) return undefined;
+    const shiftedPc = (tonic.rootPc + transposeSemitones + 120) % 12;
+    return keyPrefersFlats(shiftedPc, keyEst.mode === "minor") ?? undefined;
   }, [keyEst, transposeSemitones]);
 
   const buildCurrentProject = useCallback((): StemScribeProject | null => {
@@ -1456,9 +1464,23 @@ export const App: React.FC = () => {
         setDrumHits(hits);
       }
 
-      const melodyStem = resStems.find((s) => s.name === "vocals") ?? resStems[0];
+      const stemMean = (s: StemOutput) =>
+        s.waveform_peaks.length > 0
+          ? s.waveform_peaks.reduce((a, b) => a + b, 0) / s.waveform_peaks.length
+          : 0;
+      const vocalsStem = resStems.find((s) => s.name === "vocals");
+      const vocalsMean = vocalsStem ? stemMean(vocalsStem) : 0;
+      const loudestMean = resStems.reduce((m, s) => Math.max(m, stemMean(s)), 0);
+      const vocalsWeak = !vocalsStem || vocalsMean < 0.05 || vocalsMean < loudestMean * 0.15;
+      const melodyStem = vocalsWeak
+        ? resStems.find((s) => s.name === "other") ?? resStems[0]
+        : vocalsStem;
       if (melodyStem && (await ensureModelInstalled("basic_pitch"))) {
-        setStatusMsg(`一键扒带 4/4 · 转录「${melodyStem.label_zh}」…`);
+        setStatusMsg(
+          vocalsWeak
+            ? `一键扒带 4/4 · 未检测到人声，改为转录「${melodyStem.label_zh}」旋律…`
+            : `一键扒带 4/4 · 转录「${melodyStem.label_zh}」…`
+        );
         const tr = await transcribeStemToMidi(melodyStem.file_path, melodyStem.name);
         setActiveStemName(melodyStem.label_zh);
         setBpm(tr.estimated_bpm);
@@ -1847,6 +1869,7 @@ export const App: React.FC = () => {
             chords={chords}
             detectingChords={detectingChords}
             transposeSemitones={transposeSemitones}
+            useFlats={useFlats}
             markers={markers}
             notes={transposedNotes}
             midiLabel={activeStemName}
@@ -1966,6 +1989,7 @@ export const App: React.FC = () => {
               chords={chords}
               currentTime={currentTime}
               transposeSemitones={transposeSemitones}
+              useFlats={useFlats}
               capoFret={capoFret}
               scalePitchClasses={transposedScale}
               midiDevices={midiDevices}
@@ -1983,6 +2007,7 @@ export const App: React.FC = () => {
               currentTime={currentTime}
               playbackRate={playbackRate}
               transposeSemitones={transposeSemitones}
+              useFlats={useFlats}
               notes={transposedNotes}
               chords={chords}
               records={practiceRecords}
@@ -2108,6 +2133,7 @@ export const App: React.FC = () => {
               durationSec={audioMeta?.duration_sec ?? 0}
               currentTime={currentTime}
               transposeSemitones={transposeSemitones}
+              useFlats={useFlats}
               keyTonic={keyEst?.tonic}
               keyMode={keyEst?.mode}
               detecting={detectingChords}
@@ -2219,6 +2245,7 @@ export const App: React.FC = () => {
         bpm={bpm}
         playbackRate={playbackRate}
         transposeSemitones={transposeSemitones}
+        useFlats={useFlats}
         capoFret={capoFret}
         loopEnabled={loopEnabled}
         chords={chords}
@@ -2249,6 +2276,7 @@ export const App: React.FC = () => {
         bpm={bpm}
         keyEst={keyEst}
         transposeSemitones={transposeSemitones}
+        useFlats={useFlats}
         capoFret={capoFret}
         chords={chords}
         lyrics={lyrics}
@@ -2276,6 +2304,7 @@ export const App: React.FC = () => {
         bpm={bpm}
         keyEst={keyEst}
         transposeSemitones={transposeSemitones}
+        useFlats={useFlats}
         capoFret={capoFret}
         chords={chords}
         structure={structure}

@@ -12,6 +12,7 @@ interface Props {
   bpm: number;
   playbackRate: number;
   transposeSemitones: number;
+  useFlats?: boolean;
   capoFret: number;
   loopEnabled: boolean;
   chords: ChordEvent[];
@@ -36,6 +37,7 @@ export const StageModeOverlay: React.FC<Props> = ({
   bpm,
   playbackRate,
   transposeSemitones,
+  useFlats,
   capoFret,
   loopEnabled,
   chords,
@@ -96,8 +98,8 @@ export const StageModeOverlay: React.FC<Props> = ({
 
   const beatPhase = bpm > 0 ? Math.floor(currentTime / (60 / bpm)) % 4 : 0;
   const displayChord = (sym: string) => {
-    const sounding = transposeChordSymbol(sym, transposeSemitones);
-    return capoFret > 0 ? transposeChordSymbol(sounding, -capoFret) : sounding;
+    const sounding = transposeChordSymbol(sym, transposeSemitones, useFlats);
+    return capoFret > 0 ? transposeChordSymbol(sounding, -capoFret, useFlats) : sounding;
   };
   const chordProgress =
     currentChord && currentChord.end_sec > currentChord.start_sec

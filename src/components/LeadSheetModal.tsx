@@ -15,6 +15,7 @@ interface Props {
   bpm: number;
   keyEst: KeyEstimate | null;
   transposeSemitones: number;
+  useFlats?: boolean;
   capoFret: number;
   chords: ChordEvent[];
   lyrics: LyricLine[];
@@ -29,6 +30,7 @@ export const LeadSheetModal: React.FC<Props> = ({
   bpm,
   keyEst,
   transposeSemitones,
+  useFlats,
   capoFret,
   chords,
   lyrics,
@@ -39,11 +41,11 @@ export const LeadSheetModal: React.FC<Props> = ({
   const adjustedChords = useMemo(
     () =>
       chords.map((c) => {
-        const sounding = transposeChordSymbol(c.symbol, transposeSemitones);
-        const shape = capoFret > 0 ? transposeChordSymbol(sounding, -capoFret) : sounding;
+        const sounding = transposeChordSymbol(c.symbol, transposeSemitones, useFlats);
+        const shape = capoFret > 0 ? transposeChordSymbol(sounding, -capoFret, useFlats) : sounding;
         return { ...c, symbol: shape };
       }),
-    [chords, transposeSemitones, capoFret]
+    [chords, transposeSemitones, useFlats, capoFret]
   );
 
   const uniqueChords = useMemo(

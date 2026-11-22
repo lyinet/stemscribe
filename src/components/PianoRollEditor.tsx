@@ -58,6 +58,8 @@ export const PianoRollEditor: React.FC<Props> = ({
   onChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const hadNotesRef = useRef(false);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [snapDiv, setSnapDiv] = useState<number>(4);
   const [highlightScale, setHighlightScale] = useState<boolean>(true);
@@ -67,6 +69,20 @@ export const PianoRollEditor: React.FC<Props> = ({
   const maxEnd = Math.max(10, ...notes.map((n) => n.end_sec + 1.5));
   const canvasW = Math.ceil(KEY_W + maxEnd * PX_PER_SEC);
   const canvasH = NUM_ROWS * ROW_H;
+
+  // On mount / first arrival of notes, center the roll vertically on the median pitch.
+  useEffect(() => {
+    const hasNotes = notes.length > 0;
+    if (hasNotes && !hadNotesRef.current) {
+      const pitches = notes.map((n) => n.pitch).sort((a, b) => a - b);
+      const median = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitches[Math.floor(pitches.length / 2)]));
+      const el = scrollRef.current;
+      if (el) {
+        el.scrollTop = Math.max(0, (MAX_PITCH - median) * ROW_H - el.clientHeight / 2 + ROW_H / 2);
+      }
+    }
+    hadNotesRef.current = hasNotes;
+  }, [notes]);
 
   const snapTime = (sec: number): number => {
     if (snapDiv <= 0) return Math.max(0, sec);
@@ -415,6 +431,7 @@ export const PianoRollEditor: React.FC<Props> = ({
       </div>
 
       <div
+        ref={scrollRef}
         style={{
           overflow: "auto",
           maxHeight: 310,

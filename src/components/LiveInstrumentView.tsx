@@ -15,6 +15,7 @@ interface Props {
   chords: ChordEvent[];
   currentTime: number;
   transposeSemitones: number;
+  useFlats?: boolean;
   capoFret: number;
   scalePitchClasses?: number[];
   midiDevices: MidiInputDeviceInfo[];
@@ -36,6 +37,7 @@ export const LiveInstrumentView: React.FC<Props> = ({
   chords,
   currentTime,
   transposeSemitones,
+  useFlats,
   capoFret,
   scalePitchClasses,
   midiDevices,
@@ -117,10 +119,10 @@ export const LiveInstrumentView: React.FC<Props> = ({
   );
 
   const soundingChordSymbol = activeChord
-    ? transposeChordSymbol(activeChord.symbol, transposeSemitones)
+    ? transposeChordSymbol(activeChord.symbol, transposeSemitones, useFlats)
     : null;
   const capoChordShape = soundingChordSymbol
-    ? transposeChordSymbol(soundingChordSymbol, -capoFret)
+    ? transposeChordSymbol(soundingChordSymbol, -capoFret, useFlats)
     : null;
 
   const activeChordPcs = useMemo(
@@ -134,8 +136,8 @@ export const LiveInstrumentView: React.FC<Props> = ({
   );
 
   const capoRecommendations = useMemo(
-    () => recommendCapoFrets(chords, transposeSemitones),
-    [chords, transposeSemitones]
+    () => recommendCapoFrets(chords, transposeSemitones, useFlats),
+    [chords, transposeSemitones, useFlats]
   );
   const topCapo = capoRecommendations[0];
 

@@ -46,6 +46,7 @@ interface Props {
   chords: ChordEvent[];
   detectingChords: boolean;
   transposeSemitones: number;
+  useFlats?: boolean;
   markers: SectionMarker[];
   notes: MidiNote[];
   midiLabel: string;
@@ -166,6 +167,7 @@ export const Arrangement: React.FC<Props> = ({
   chords,
   detectingChords,
   transposeSemitones,
+  useFlats,
   markers,
   notes,
   midiLabel,
@@ -281,9 +283,9 @@ export const Arrangement: React.FC<Props> = ({
       chords.map((c, i) => ({
         ...c,
         end: chords[i + 1]?.start_sec ?? Math.max(c.end_sec, c.start_sec + 0.5),
-        label: transposeChordSymbol(c.symbol, transposeSemitones),
+        label: transposeChordSymbol(c.symbol, transposeSemitones, useFlats),
       })),
-    [chords, transposeSemitones]
+    [chords, transposeSemitones, useFlats]
   );
 
   const showLoop = loopEnabled && loopB > loopA;

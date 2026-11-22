@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Music, Plus, Trash2, Volume2 } from "lucide-react";
-import { chordToRomanNumeral } from "../lib/musicTheory";
+import { chordToRomanNumeral, parseChordSymbol, transposeChordSymbol } from "../lib/musicTheory";
 import type { ChordEvent } from "../types/music";
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
   durationSec: number;
   currentTime: number;
   transposeSemitones: number;
+  useFlats?: boolean;
   keyTonic?: string;
   keyMode?: string;
   detecting: boolean;
@@ -16,8 +17,6 @@ interface Props {
   onSeek: (sec: number) => void;
   onAuditionChord?: (symbol: string) => void;
 }
-
-const ROOTS = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 
 const GUITAR_SHAPES: Record<string, number[]> = {
   C: [-1, 3, 2, 0, 1, 0],
@@ -54,26 +53,21 @@ const GUITAR_SHAPES: Record<string, number[]> = {
   "C#m": [-1, 4, 6, 6, 5, 4],
 };
 
-function transposeChordSymbol(symbol: string, semitones: number): string {
-  if (!semitones || symbol === "N") return symbol;
-  const match = symbol.match(/^([A-G][#b]?)(.*)$/);
-  if (!match) return symbol;
-  const [, root, suffix] = match;
-  const enharmonic: Record<string, string> = {
-    Db: "C#",
-    "D#": "Eb",
-    Gb: "F#",
-    "G#": "Ab",
-    "A#": "Bb",
-  };
-  const norm = enharmonic[root] ?? root;
-  const idx = ROOTS.indexOf(norm);
-  if (idx < 0) return symbol;
-  return `${ROOTS[(idx + semitones + 120) % 12]}${suffix}`;
+// Lookup keyed by pitch-class + suffix so flat spellings (Bb, Eb, Db...) resolve too.
+const SHAPES_BY_PC: Record<string, number[]> = {};
+for (const [sym, frets] of Object.entries(GUITAR_SHAPES)) {
+  const p = parseChordSymbol(sym);
+  if (p) SHAPES_BY_PC[`${p.rootPc}${p.suffix}`] = frets;
+}
+
+function lookupGuitarShape(symbol: string): number[] | undefined {
+  const p = parseChordSymbol(symbol);
+  if (!p) return GUITAR_SHAPES[symbol];
+  return SHAPES_BY_PC[`${p.rootPc}${p.suffix}`];
 }
 
 const GuitarChordSvg: React.FC<{ symbol: string }> = ({ symbol }) => {
-  const frets = GUITAR_SHAPES[symbol];
+  const frets = lookupGuitarShape(symbol);
   if (!frets) return null;
 
   const positive = frets.filter((f) => f > 0);
@@ -171,6 +165,7 @@ export const ChordTrack: React.FC<Props> = ({
   durationSec,
   currentTime,
   transposeSemitones,
+  useFlats,
   keyTonic,
   keyMode,
   detecting,
@@ -185,9 +180,9 @@ export const ChordTrack: React.FC<Props> = ({
 
   const activeChord = chords.find((c) => currentTime >= c.start_sec && currentTime < c.end_sec);
   const displayActive = activeChord
-    ? transposeChordSymbol(activeChord.symbol, transposeSemitones)
+    ? transposeChordSymbol(activeChord.symbol, transposeSemitones, useFlats)
     : chords.length > 0
-      ? transposeChordSymbol(chords[0].symbol, transposeSemitones)
+      ? transposeChordSymbol(chords[0].symbol, transposeSemitones, useFlats)
       : "";
 
   const commitEdit = (idx: number) => {
@@ -266,7 +261,7 @@ export const ChordTrack: React.FC<Props> = ({
               const isNow = currentTime >= c.start_sec && currentTime < c.end_sec;
               const widthPct =
                 durationSec > 0 ? ((c.end_sec - c.start_sec) / durationSec) * 100 : 12;
-              const shown = transposeChordSymbol(c.symbol, transposeSemitones);
+              const shown = transposeChordSymbol(c.symbol, transposeSemitones, useFlats);
 
               if (editingIdx === idx) {
                 return (
