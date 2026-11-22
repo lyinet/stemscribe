@@ -31,7 +31,7 @@ use tauri::AppHandle;
 async fn inspect_audio_file(file_path: String) -> Result<AudioMetadata, String> {
     tokio::task::spawn_blocking(move || audio::inspect_audio(&file_path))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -39,7 +39,7 @@ async fn inspect_audio_file(file_path: String) -> Result<AudioMetadata, String> 
 async fn detect_bpm_local(file_path: String) -> Result<TempoAndLoudness, String> {
     tokio::task::spawn_blocking(move || audio::bpm::analyze_tempo_and_loudness(&file_path))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -51,7 +51,7 @@ async fn detect_chords_local(
     let win = window_sec.unwrap_or(1.5);
     tokio::task::spawn_blocking(move || audio::chords::detect_chords(&file_path, win))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -67,7 +67,7 @@ async fn reharmonize_chords_local(
 async fn detect_key_local(file_path: String) -> Result<KeyEstimate, String> {
     tokio::task::spawn_blocking(move || audio::key::detect_key(&file_path))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -77,7 +77,7 @@ async fn detect_song_structure_local(
 ) -> Result<Vec<SongStructureSegment>, String> {
     tokio::task::spawn_blocking(move || audio::structure::detect_song_structure(&file_path))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -85,7 +85,7 @@ async fn detect_song_structure_local(
 async fn detect_drum_hits_local(drum_stem_path: String) -> Result<Vec<DrumHit>, String> {
     tokio::task::spawn_blocking(move || audio::drums::detect_drum_hits(&drum_stem_path))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -100,7 +100,7 @@ async fn export_audio_slice_wav(
         audio::export_audio_slice_wav(&file_path, start_sec, end_sec, &save_path)
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
     .map_err(|e| e.to_string())
 }
 
@@ -114,7 +114,7 @@ async fn export_mixed_wav(
         audio::export_mixed_stems_wav(&inputs, &save_path, target_peak_dbfs)
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
     .map_err(|e| e.to_string())
 }
 
@@ -128,7 +128,7 @@ async fn save_recorded_take_wav(
         audio::takes::save_take_wav_base64(&song_name, &label, &wav_base64)
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
     .map_err(|e| e.to_string())
 }
 
@@ -150,7 +150,7 @@ async fn mix_take_with_stems_wav(
         )
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
     .map_err(|e| e.to_string())
 }
 
@@ -186,7 +186,7 @@ async fn run_batch_job(
 ) -> Result<BatchJobSummary, String> {
     tokio::task::spawn_blocking(move || batch::run_batch_queue(&app, options))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -256,7 +256,7 @@ async fn download_onnx_model(
 async fn import_onnx_model(model_id: String, source_path: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || ml::downloader::import_local_model(&model_id, &source_path))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -272,7 +272,7 @@ async fn separate_stems(
 ) -> Result<Vec<StemOutput>, String> {
     tokio::task::spawn_blocking(move || ml::separator::run_separation(&file_path, output_dir))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -283,7 +283,7 @@ async fn transcribe_stem_to_midi(
 ) -> Result<TranscriptionResult, String> {
     tokio::task::spawn_blocking(move || ml::transcriber::run_transcription(&stem_path, &stem_name))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -291,7 +291,7 @@ async fn transcribe_stem_to_midi(
 async fn import_midi_file(midi_path: String) -> Result<TranscriptionResult, String> {
     tokio::task::spawn_blocking(move || ml::transcriber::read_midi_file(&midi_path))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -303,7 +303,7 @@ async fn export_midi_file(
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || ml::transcriber::write_midi_file(&notes, bpm, &save_path))
         .await
-        .map_err(|e| format!("Task join error: {e}"))?
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
 }
 
@@ -318,7 +318,7 @@ async fn export_midi_with_chords(
         ml::transcriber::write_multitrack_midi_with_chords(&notes, &chords, bpm, &save_path)
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
     .map_err(|e| e.to_string())
 }
 
@@ -334,7 +334,7 @@ async fn export_musicxml_file(
         ml::musicxml::write_musicxml_file(&title, &notes, &chords, bpm, &save_path)
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
     .map_err(|e| e.to_string())
 }
 
@@ -449,7 +449,7 @@ async fn export_practice_bundle(
         project::export_practice_bundle(&project, key_label.as_deref(), &target_dir)
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
     .map_err(|e| e.to_string())
 }
 
@@ -498,6 +498,45 @@ async fn refine_midi_with_llm(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if let Some(log_dir) =
+            dirs::home_dir().map(|h| h.join("Library").join("Logs").join("StemScribe"))
+        {
+            if std::fs::create_dir_all(&log_dir).is_ok() {
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let thread = std::thread::current();
+                let thread_name = thread.name().unwrap_or("<unnamed>");
+                let payload = info
+                    .payload()
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+                    .or_else(|| info.payload().downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                let location = info
+                    .location()
+                    .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                let backtrace = std::backtrace::Backtrace::force_capture();
+                let entry = format!(
+                    "=== StemScribe {} panic @ {ts} ===\nthread: {thread_name}\nmessage: {payload}\nlocation: {location}\nbacktrace:\n{backtrace}\n\n",
+                    env!("CARGO_PKG_VERSION")
+                );
+                use std::io::Write;
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(log_dir.join("crash.log"))
+                {
+                    let _ = f.write_all(entry.as_bytes());
+                }
+            }
+        }
+        default_hook(info);
+    }));
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

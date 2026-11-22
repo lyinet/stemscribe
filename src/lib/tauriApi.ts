@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import type {
   ArrangementAnalysis,
   AudioMetadata,
@@ -38,6 +38,11 @@ import type {
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export async function askConfirm(message: string, title = "StemScribe"): Promise<boolean> {
+  if (!isTauriRuntime()) return window.confirm(message);
+  return ask(message, { title, kind: "info" });
 }
 
 export function resolveAudioUrl(filePath: string): string {
@@ -497,8 +502,9 @@ export async function listOnnxModels(): Promise<ModelItemInfo[]> {
         display_name: "Basic Pitch (音频转 MIDI)",
         file_name: "basic_pitch.onnx",
         default_url:
-          "https://huggingface.co/spaces/spotify/basic-pitch/resolve/main/basic_pitch/saved_models/icassp_2022/nmp.onnx",
-        recommended_source_hint: "支持一键在线下载官方 Spotify ONNX 模型，或替换为国内 HF 镜像 / 离线导入。",
+          "https://github.com/spotify/basic-pitch/raw/main/basic_pitch/saved_models/icassp_2022/nmp.onnx",
+        recommended_source_hint:
+          "Spotify 官方 Basic Pitch 模型（约 230 KB），可一键下载或离线导入。",
         direct_download_ready: true,
         installed: false,
         size_bytes: 0,
@@ -507,9 +513,11 @@ export async function listOnnxModels(): Promise<ModelItemInfo[]> {
         id: "htdemucs",
         display_name: "HTDemucs 4-Stem (人声/鼓/贝斯/伴奏)",
         file_name: "htdemucs.onnx",
-        default_url: "",
-        recommended_source_hint: "请运行 scripts/export_models_onnx.py 本地导出后点击「从本地导入 .onnx」，或填入自建镜像 URL。",
-        direct_download_ready: false,
+        default_url:
+          "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/main/htdemucs_fp16weights.onnx",
+        recommended_source_hint:
+          "Meta HTDemucs 4 轨分离模型 ONNX 版（约 166 MB），可一键下载，也可填入镜像地址或离线导入。",
+        direct_download_ready: true,
         installed: false,
         size_bytes: 0,
       },

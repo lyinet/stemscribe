@@ -220,14 +220,12 @@ export const SettingsModal: React.FC<Props> = ({
 
             {section === "models" && (
               <>
-                <p className="set-intro">AI 分轨与扒谱在本机运行（Apple Silicon CoreML 加速），需要先下载对应的 ONNX 模型。</p>
+                <p className="set-intro">AI 分轨与扒谱完全在本机离线运行，音频不会上传。首次使用需下载一次模型。</p>
                 <div className="status-list">
                   <div className="status-item">
                     <Cpu size={15} />
-                    <span>硬件加速</span>
-                    <b className={modelStatus?.coreml_enabled ? "ok" : ""}>
-                      {modelStatus?.coreml_enabled ? "CoreML 已启用" : "CPU"}
-                    </b>
+                    <span>推理引擎</span>
+                    <b className="ok">ONNX Runtime 本地推理</b>
                   </div>
                   <div className="status-item">
                     <HardDrive size={15} />
@@ -282,6 +280,7 @@ export const SettingsModal: React.FC<Props> = ({
                 <div className="about-hero">
                   <div className="about-name">StemScribe</div>
                   <div className="set-hint">版本 {appVersion} · macOS Apple Silicon AI 扒带工作站</div>
+                  <div className="set-hint">崩溃日志：~/Library/Logs/StemScribe/crash.log</div>
                 </div>
                 <div className="row">
                   <button className="btn" onClick={onOpenDiagnostics}>

@@ -28,6 +28,7 @@ export const ModelManagerModal: React.FC<Props> = ({
   const [progress, setProgress] = useState<Record<string, DownloadProgressEvent>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
+  const [msgIsError, setMsgIsError] = useState(false);
 
   const refresh = async () => {
     const list = await listOnnxModels();
@@ -60,9 +61,12 @@ export const ModelManagerModal: React.FC<Props> = ({
   const fmtSize = (bytes: number) =>
     bytes > 0 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : "未安装";
 
+  const fmtMb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
   const handleDownload = async (id: string) => {
     setBusyId(id);
     setMsg("");
+    setMsgIsError(false);
     try {
       const saved = await downloadOnnxModel(id, urls[id] ?? "");
       setMsg(`模型已就绪：${saved}`);
@@ -70,6 +74,7 @@ export const ModelManagerModal: React.FC<Props> = ({
       onModelsUpdated();
     } catch (err) {
       setMsg(`下载失败：${String(err)}`);
+      setMsgIsError(true);
     } finally {
       setBusyId(null);
     }
@@ -80,6 +85,7 @@ export const ModelManagerModal: React.FC<Props> = ({
     if (!sourcePath) return;
     setBusyId(id);
     setMsg("");
+    setMsgIsError(false);
     try {
       const saved = await importOnnxModel(id, sourcePath);
       setMsg(`已离线导入本地模型：${saved}`);
@@ -87,6 +93,7 @@ export const ModelManagerModal: React.FC<Props> = ({
       onModelsUpdated();
     } catch (err) {
       setMsg(`本地导入失败：${String(err)}`);
+      setMsgIsError(true);
     } finally {
       setBusyId(null);
     }
@@ -151,7 +158,8 @@ export const ModelManagerModal: React.FC<Props> = ({
               {prog && busyId === m.id && (
                 <div style={{ marginBottom: 8 }}>
                   <div className="muted" style={{ marginBottom: 4 }}>
-                    下载中：{prog.percent.toFixed(1)}% ({fmtSize(prog.downloaded_bytes)})
+                    下载中：{prog.percent.toFixed(1)}%（{fmtMb(prog.downloaded_bytes)}
+                    {prog.total_bytes > 0 ? ` / ${fmtMb(prog.total_bytes)}` : ""}）
                   </div>
                   <div style={{ height: 6, background: "#232936", borderRadius: 4, overflow: "hidden" }}>
                     <div
@@ -177,7 +185,7 @@ export const ModelManagerModal: React.FC<Props> = ({
                   className={`btn btn-sm ${!m.direct_download_ready ? "btn-primary" : ""}`}
                   disabled={busyId !== null}
                   onClick={() => handleImportLocal(m.id)}
-                  title="选择本地已下载或由 scripts/export_models_onnx.py 导出的 .onnx 文件"
+                  title="选择本地 .onnx 模型文件"
                 >
                   <FolderOpen size={13} /> 从本地导入 .onnx
                 </button>
@@ -192,7 +200,10 @@ export const ModelManagerModal: React.FC<Props> = ({
         })}
 
         {msg && (
-          <div className="muted" style={{ marginTop: 10, color: "var(--accent)", fontSize: 12 }}>
+          <div
+            className="muted"
+            style={{ marginTop: 10, color: msgIsError ? "var(--rose)" : "var(--accent)", fontSize: 12 }}
+          >
             {msg}
           </div>
         )}

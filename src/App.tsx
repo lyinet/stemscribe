@@ -29,6 +29,7 @@ import { CommandPaletteModal, type PaletteCommand } from "./components/CommandPa
 import { CoverStudioView } from "./components/CoverStudioView";
 import { DiagnosticsModal } from "./components/DiagnosticsModal";
 import { DrumPatternView } from "./components/DrumPatternView";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FallingNotesView } from "./components/FallingNotesView";
 import { LeadSheetModal } from "./components/LeadSheetModal";
 import { LiveInstrumentView } from "./components/LiveInstrumentView";
@@ -55,6 +56,7 @@ import { createDemoStudioBundle } from "./lib/demoStudio";
 import { chordToMidiVoicing } from "./lib/musicTheory";
 import {
   analyzeArrangementWithLlm,
+  askConfirm,
   deleteSetlist,
   detectBpmLocal,
   detectChordsLocal,
@@ -552,6 +554,14 @@ export const App: React.FC = () => {
   const refreshModelStatus = () => {
     getModelStatus().then(setModelStatus).catch(() => {});
   };
+
+  useEffect(() => {
+    const onUnhandledRejection = (evt: PromiseRejectionEvent) => {
+      setStatusMsg(`后台任务出错: ${String(evt.reason)}`);
+    };
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    return () => window.removeEventListener("unhandledrejection", onUnhandledRejection);
+  }, []);
 
   useEffect(() => {
     engineRef.current = new MultiStemAudioEngine();
@@ -1351,14 +1361,37 @@ export const App: React.FC = () => {
     }
   };
 
+  const ensureModelInstalled = async (kind: "demucs" | "basic_pitch"): Promise<boolean> => {
+    try {
+      const status = await getModelStatus();
+      setModelStatus(status);
+      const installed = kind === "demucs" ? status.demucs_installed : status.basic_pitch_installed;
+      if (installed) return true;
+    } catch {
+      return true;
+    }
+    const message =
+      kind === "demucs"
+        ? "AI 分轨需要下载 HTDemucs 模型（约 166 MB，只需一次，之后完全离线运行）。现在打开模型管理器下载吗？"
+        : "扒谱需要下载 Basic Pitch 模型（约 230 KB）。现在下载吗？";
+    const yes = await askConfirm(message, "需要下载 AI 模型");
+    if (yes) {
+      setShowModelModal(true);
+    } else {
+      setStatusMsg("已取消：缺少本地 AI 模型，可在「设置 → 模型」中随时下载。");
+    }
+    return false;
+  };
+
   const handleSeparateStems = async () => {
     if (!audioMeta) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
       setStatusMsg("内置演示曲已自带 4 条独立音轨，无需再次分轨。");
       return;
     }
+    if (!(await ensureModelInstalled("demucs"))) return;
     setSeparating(true);
-    setStatusMsg("正在调用 Apple Silicon CoreML 进行 4 轨 AI 分离...");
+    setStatusMsg("正在 AI 4 轨分离（耗时约为歌曲时长的一半）...");
     try {
       const res = await separateStems(audioMeta.file_path);
       setStems(res);
@@ -1385,9 +1418,10 @@ export const App: React.FC = () => {
       setStatusMsg("内置演示曲已预置完整 4 轨、和弦、曲式与乐谱；拖入任意本地音频即可体验一键全自动扒带。");
       return;
     }
+    if (!(await ensureModelInstalled("demucs"))) return;
     setAutoPipelining(true);
     try {
-      setStatusMsg("✨ 一键全自动扒带 (1/4)：正在 CoreML 4 轨分离...");
+      setStatusMsg("✨ 一键全自动扒带 (1/4)：正在 AI 4 轨分离（耗时约为歌曲时长的一半）...");
       const resStems = await separateStems(audioMeta.file_path);
       setStems(resStems);
       const initMixer: Record<string, StemMixerState> = {};
@@ -1420,7 +1454,7 @@ export const App: React.FC = () => {
       }
 
       const melodyStem = resStems.find((s) => s.name === "vocals") ?? resStems[0];
-      if (melodyStem) {
+      if (melodyStem && (await ensureModelInstalled("basic_pitch"))) {
         setStatusMsg(`✨ 一键全自动扒带 (4/4)：正在转录「${melodyStem.label_zh}」主旋律 MIDI...`);
         const tr = await transcribeStemToMidi(melodyStem.file_path, melodyStem.name);
         setActiveStemName(melodyStem.label_zh);
@@ -1451,8 +1485,9 @@ export const App: React.FC = () => {
   };
 
   const handleTranscribe = async (stem: StemOutput) => {
+    if (!(await ensureModelInstalled("basic_pitch"))) return;
     setTranscribingStem(stem.name);
-    setStatusMsg(`正在使用 Basic Pitch CoreML 转录「${stem.label_zh}」...`);
+    setStatusMsg(`正在使用 Basic Pitch 本地转录「${stem.label_zh}」...`);
     try {
       const res = await transcribeStemToMidi(stem.file_path, stem.name);
       setActiveStemName(stem.label_zh);
@@ -1602,6 +1637,10 @@ export const App: React.FC = () => {
     peaks: st.waveform_peaks,
     isOriginal: st.name === "original",
   }));
+
+  const activeTabLabel = EDITOR_TAB_GROUPS.flatMap((g) => g.tabs).find(
+    (t) => t.id === studioTab
+  )?.label;
 
   const editorTabCounts: Partial<Record<StudioTab, number>> = {
     score: transposedNotes.length,
@@ -1880,6 +1919,7 @@ export const App: React.FC = () => {
             </div>
             {editorOpen && (
               <div className="editor-body">
+            <ErrorBoundary compact resetKey={studioTab} label={activeTabLabel}>
           {studioTab === "falling" && (
             <FallingNotesView
               notes={transposedNotes}
@@ -2074,6 +2114,7 @@ export const App: React.FC = () => {
               onReverbChange={handleReverbChange}
             />
           )}
+            </ErrorBoundary>
               </div>
             )}
           </div>
@@ -2090,6 +2131,7 @@ export const App: React.FC = () => {
               </button>
             </div>
             <div className="inspector-body">
+              <ErrorBoundary compact label="AI 助手">
               <AiAssistantPanel
                 configured={Boolean(relayConfig.base_url.trim() && relayConfig.api_key.trim())}
                 onOpenSettings={() => openSettings("ai")}
@@ -2105,6 +2147,7 @@ export const App: React.FC = () => {
                 onAnalyzeArrangement={handleAnalyzeArrangement}
                 onRefineMidi={handleRefineMidi}
               />
+              </ErrorBoundary>
             </div>
           </aside>
         )}
@@ -2113,7 +2156,7 @@ export const App: React.FC = () => {
       <footer className="statusbar">
         <span className="statusbar-msg" title={statusMsg}>{statusMsg}</span>
         <span className="statusbar-meta">
-          {modelStatus?.coreml_enabled ? "CoreML" : "CPU"} · v0.9.15
+          ONNX Runtime · v0.9.15
         </span>
       </footer>
 
