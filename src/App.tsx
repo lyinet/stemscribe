@@ -1979,6 +1979,7 @@ export const App: React.FC = () => {
               bpm={bpm}
               pressedHardwareNotes={pressedHardwareNotes}
               scalePitchClasses={transposedScale}
+              useFlats={useFlats}
               onAuditionNote={(midi) => engineRef.current?.playSingleNote(midi)}
             />
           )}

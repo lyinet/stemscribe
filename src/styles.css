@@ -309,6 +309,14 @@ input[type="range"]:not(.eq-fader):disabled::-webkit-slider-thumb {
   font-size: 11px;
 }
 
+.topbar,
+.statusbar,
+.arr-head,
+.editor-tabs {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .statusbar {
   display: flex;
   align-items: center;
@@ -1129,7 +1137,7 @@ input[type="range"]:not(.eq-fader):disabled::-webkit-slider-thumb {
   top: 3px;
   bottom: 3px;
   margin-left: 1px;
-  padding: 0 6px;
+  padding: 0 5px;
   border-radius: 4px;
   background: rgba(127, 127, 127, 0.12);
   color: var(--text);
@@ -1138,6 +1146,7 @@ input[type="range"]:not(.eq-fader):disabled::-webkit-slider-thumb {
   line-height: 20px;
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 

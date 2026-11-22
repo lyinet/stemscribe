@@ -402,15 +402,16 @@ export const Arrangement: React.FC<Props> = ({
             <div className="arr-lane" style={{ width: laneW }} onClick={seekFromLane}>
               {chordBlocks.map((c, i) => {
                 const active = currentTime >= c.start_sec && currentTime < c.end;
+                const w = Math.max(2, x(c.end) - x(c.start_sec) - 1);
                 return (
                   <div
                     key={`${c.start_sec}_${i}`}
                     className={`chord-block ${active ? "active" : ""}`}
-                    style={{ left: x(c.start_sec), width: Math.max(2, x(c.end) - x(c.start_sec) - 1) }}
+                    style={{ left: x(c.start_sec), width: w }}
                     title={`${c.label} · ${c.start_sec.toFixed(1)}s`}
                     onClick={() => onSeek(c.start_sec)}
                   >
-                    {c.label}
+                    {w >= 26 ? c.label : null}
                   </div>
                 );
               })}

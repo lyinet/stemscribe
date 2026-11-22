@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { NOTE_NAMES_SHARP } from "../lib/musicTheory";
+import { NOTE_NAMES_FLAT, NOTE_NAMES_SHARP } from "../lib/musicTheory";
 import type { MidiNote } from "../types/music";
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   bpm: number;
   pressedHardwareNotes: number[];
   scalePitchClasses?: number[];
+  useFlats?: boolean;
   onAuditionNote: (midiPitch: number) => void;
 }
 
@@ -24,6 +25,7 @@ export const FallingNotesView: React.FC<Props> = ({
   bpm,
   pressedHardwareNotes,
   scalePitchClasses,
+  useFlats,
   onAuditionNote,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -168,7 +170,7 @@ export const FallingNotesView: React.FC<Props> = ({
         ctx.fillStyle = "#ffffff";
         ctx.font = "600 10px -apple-system, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(NOTE_NAMES_SHARP[n.pitch % 12], g.x + g.w / 2, bottom - 5);
+        ctx.fillText((useFlats ? NOTE_NAMES_FLAT : NOTE_NAMES_SHARP)[n.pitch % 12], g.x + g.w / 2, bottom - 5);
       }
     }
 
@@ -223,6 +225,7 @@ export const FallingNotesView: React.FC<Props> = ({
     bpm,
     pressedHardwareNotes,
     scalePitchClasses,
+    useFlats,
     lookaheadSec,
     showLabels,
     handSplitMode,
