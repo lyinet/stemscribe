@@ -336,8 +336,9 @@ export const CoverStudioView: React.FC<Props> = ({
                   size={11}
                   style={{ cursor: "pointer", opacity: 0.7 }}
                   onClick={() => onDeleteArchivedTake(a.file_name)}
-                  title="从磁盘删除该归档 Take"
-                />
+                >
+                  <title>从磁盘删除该归档 Take</title>
+                </Trash2>
               </span>
             ))}
           </div>

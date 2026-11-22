@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
-  Activity,
   Cpu,
   Download,
   FileText,
@@ -599,7 +598,7 @@ export const App: React.FC = () => {
   const handleDeleteProject = async (projectId: string) => {
     try {
       const list = await deleteProjectFile(projectId);
-      setSavedProjects(list);
+      setRecentProjects(list);
       setStatusMsg("已从本地工程库删除该工程。");
     } catch (err) {
       setStatusMsg(`删除工程失败: ${String(err)}`);
@@ -609,7 +608,7 @@ export const App: React.FC = () => {
   const handleRenameProject = async (projectId: string, newName: string) => {
     try {
       const list = await renameProjectFile(projectId, newName);
-      setSavedProjects(list);
+      setRecentProjects(list);
       setStatusMsg(`已重命名工程为：${newName}`);
     } catch (err) {
       setStatusMsg(`重命名工程失败: ${String(err)}`);
@@ -1553,7 +1552,7 @@ export const App: React.FC = () => {
             onClick={() => setShowProjectLibrary(true)}
             title="本地扒带工程库（搜索 / 重命名 / 删除）"
           >
-            <FolderOpen size={14} /> 工程库 ({savedProjects.length})
+            <FolderOpen size={14} /> 工程库 ({recentProjects.length})
           </button>
           <button
             className="btn"
@@ -1696,7 +1695,8 @@ export const App: React.FC = () => {
               setLoopEnabled(true);
               engineRef.current?.setLoop(true, seg.start_sec, seg.end_sec);
               engineRef.current?.seek(seg.start_sec);
-              setStatusMsg(`已锁定 A-B 循环到「${seg.label}
+              setStatusMsg(`已锁定 A-B 循环到「${seg.label}」(${seg.start_sec.toFixed(1)}s - ${seg.end_sec.toFixed(1)}s)`);
+            }}
             onConvertToMarkers={(segs) => {
               const converted = segs.map((s) => ({
                 id: `mk_sec_${s.id}_${Math.round(s.start_sec * 10)}`,
@@ -1705,7 +1705,6 @@ export const App: React.FC = () => {
               }));
               setMarkers(converted);
               setStatusMsg(`已将 ${converted.length} 个识别段落一键转为工程书签。`);
-            }}」(${seg.start_sec.toFixed(1)}s - ${seg.end_sec.toFixed(1)}s)`);
             }}
           />
 
@@ -2101,7 +2100,7 @@ export const App: React.FC = () => {
 
       <ProjectLibraryModal
         open={showProjectLibrary}
-        projects={savedProjects}
+        projects={recentProjects}
         onClose={() => setShowProjectLibrary(false)}
         onOpenProject={(id) => handleLoadProject(id)}
         onRenameProject={handleRenameProject}

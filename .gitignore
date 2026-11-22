@@ -24,3 +24,6 @@ npm-debug.log*
 *.onnx
 .env
 .env.*
+
+# Tauri generated schemas
+src-tauri/gen/

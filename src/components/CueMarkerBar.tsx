@@ -83,8 +83,9 @@ export const CueMarkerBar: React.FC<Props> = ({
                     size={11}
                     style={{ opacity: 0.85, color: "#38bdf8" }}
                     onClick={() => onLoopSection(m.time_sec, nextTime, m.label)}
-                    title={`一键 A-B 循环「${m.label}」(${m.time_sec.toFixed(1)}s - ${nextTime.toFixed(1)}s)`}
-                  />
+                  >
+                    <title>{`一键 A-B 循环「${m.label}」(${m.time_sec.toFixed(1)}s - ${nextTime.toFixed(1)}s)`}</title>
+                  </Repeat>
                   <X
                     size={11}
                     style={{ opacity: 0.7 }}

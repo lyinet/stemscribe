@@ -41,10 +41,10 @@ jobs:
 
       - name: Install frontend dependencies & TypeScript build
         run: |
-          npm install
+          npm ci
           npm run build
 
-      - name: Run Rust unit tests (19 tests)
+      - name: Run Rust unit tests
         working-directory: src-tauri
         run: cargo test -- --nocapture
 

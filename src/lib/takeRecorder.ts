@@ -9,7 +9,7 @@ export interface RecordedTake {
   savedPath?: string;
 }
 
-function encodeAudioBufferToWav(buffer: AudioBuffer): Uint8Array {
+function encodeAudioBufferToWav(buffer: AudioBuffer): Uint8Array<ArrayBuffer> {
   const numCh = Math.min(2, buffer.numberOfChannels);
   const sr = buffer.sampleRate;
   const len = buffer.length;

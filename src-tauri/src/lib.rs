@@ -208,21 +208,21 @@ pub struct SystemDiagnostics {
 #[tauri::command]
 async fn get_system_diagnostics() -> Result<SystemDiagnostics, String> {
     let ms = ml::check_model_status().map_err(|e| e.to_string())?;
-    let midi_input_count = audio::midi_in::list_midi_input_ports()
+    let midi_input_count = audio::midi_in::list_midi_inputs()
         .map(|v| v.len())
         .unwrap_or(0);
     let saved_projects_count = project::list_projects().map(|v| v.len()).unwrap_or(0);
     let practice_records_count = project::practice_log::list_records()
         .map(|v| v.len())
         .unwrap_or(0);
-    let recorded_takes_count = audio::takes::list_takes().map(|v| v.len()).unwrap_or(0);
+    let recorded_takes_count = audio::takes::list_saved_takes().map(|v| v.len()).unwrap_or(0);
     Ok(SystemDiagnostics {
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         os: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),
         coreml_enabled: ms.coreml_enabled,
-        basic_pitch_installed: ms.basic_pitch_ready,
-        htdemucs_installed: ms.htdemucs_ready,
+        basic_pitch_installed: ms.basic_pitch_installed,
+        htdemucs_installed: ms.demucs_installed,
         models_dir: ms.models_dir,
         midi_input_count,
         saved_projects_count,

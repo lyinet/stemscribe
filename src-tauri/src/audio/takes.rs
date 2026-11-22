@@ -204,7 +204,7 @@ pub fn delete_take(file_name: &str) -> Result<Vec<SavedTakeInfo>> {
     if path.exists() && path.is_file() {
         fs::remove_file(&path)?;
     }
-    list_takes()
+    list_saved_takes()
 }
 
 #[cfg(test)]

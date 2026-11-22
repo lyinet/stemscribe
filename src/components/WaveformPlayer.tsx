@@ -22,7 +22,7 @@ interface Props {
   eq: MasterEqState;
   mixer: Record<string, StemMixerState>;
   transcribingStem: string | null;
-  getFrequencyBins: (out: Uint8Array) => boolean;
+  getFrequencyBins: (out: Uint8Array<ArrayBuffer>) => boolean;
   onTogglePlay: () => void;
   onSeek: (sec: number) => void;
   onBpmChange: (nextBpm: number) => void;
@@ -59,7 +59,7 @@ const MIX_PRESETS: Array<{ id: MixPresetId; label: string }> = [
 
 const SpectrumBarCanvas: React.FC<{
   isPlaying: boolean;
-  getFrequencyBins: (out: Uint8Array) => boolean;
+  getFrequencyBins: (out: Uint8Array<ArrayBuffer>) => boolean;
 }> = ({ isPlaying, getFrequencyBins }) => {
   const ref = useRef<HTMLCanvasElement | null>(null);
 

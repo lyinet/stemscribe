@@ -196,7 +196,7 @@ export class MultiStemAudioEngine {
     if (this.highEq) this.highEq.gain.value = eq.highDb;
   }
 
-  public getFrequencyBins(out: Uint8Array): boolean {
+  public getFrequencyBins(out: Uint8Array<ArrayBuffer>): boolean {
     if (!this.analyser) return false;
     this.analyser.getByteFrequencyData(out);
     return true;
