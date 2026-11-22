@@ -52,7 +52,7 @@ jobs:
         run: npm run build:mac
 
       - name: Upload macOS DMG & App artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: StemScribe-macOS-AppleSilicon-${{ github.run_number }}
           retention-days: 30
@@ -66,5 +66,13 @@ jobs:
         with:
           prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
           generate_release_notes: true
+          body: |
+            ## 下载安装（macOS 13+，Apple Silicon M1/M2/M3/M4）
+
+            1. 下载下方 `StemScribe_*_aarch64.dmg`，打开后把 StemScribe 拖入「应用程序」。
+            2. 当前为未签名预发布版，首次打开若提示「已损坏」或「无法验证开发者」，在终端执行：
+               `xattr -cr /Applications/StemScribe.app`
+               或在「应用程序」中右键 StemScribe →「打开」。
+            3. AI 分轨 / 扒谱需要 ONNX 模型，可在应用内「模型管理」下载或导入。
           files: |
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
