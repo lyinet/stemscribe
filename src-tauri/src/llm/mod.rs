@@ -1,6 +1,6 @@
 pub mod lyrics;
 
-use crate::audio::{decode_audio_file, resample_linear};
+use crate::audio::{decode_audio_file, resample::resample_hq};
 use crate::ml::transcriber::MidiNote;
 use anyhow::{anyhow, Context, Result};
 use base64::Engine;
@@ -75,7 +75,7 @@ pub(crate) fn encode_relay_audio_wav_b64(
     let end_idx = ((end_s * sr) as usize).min(mono.len());
     let slice = &mono[start_idx..end_idx];
 
-    let resampled = resample_linear(slice, decoded.sample_rate, RELAY_TARGET_SR);
+    let resampled = resample_hq(slice, decoded.sample_rate, RELAY_TARGET_SR);
 
     let mut wav_buf = Cursor::new(Vec::<u8>::new());
     {

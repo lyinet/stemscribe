@@ -55,6 +55,13 @@ jobs:
           # an ONNX Runtime download that no longer exists; force it to re-run.
           cargo clean --manifest-path src-tauri/Cargo.toml --release --target aarch64-apple-darwin -p ort-sys
           npm run build:mac
+          # External version is 4-part displayVersion (e.g. 0.10.0.0); rename the
+          # bundled 3-part-semver DMG before artifact upload / release.
+          DISPLAY_VERSION=$(node -p "require('./package.json').displayVersion")
+          DMG_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
+          for f in "$DMG_DIR"/StemScribe_*_aarch64.dmg; do
+            mv "$f" "$DMG_DIR/StemScribe_${DISPLAY_VERSION}_aarch64.dmg"
+          done
 
       - name: Upload macOS DMG & App artifacts
         uses: actions/upload-artifact@v5

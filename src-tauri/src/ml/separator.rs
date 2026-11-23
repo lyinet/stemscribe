@@ -1,4 +1,4 @@
-use crate::audio::{decode_audio_file, extract_waveform_peaks, resample_linear, write_stereo_wav};
+use crate::audio::{decode_audio_file, extract_waveform_peaks, resample::resample_hq_stereo, write_stereo_wav_f32};
 use crate::ml::{build_cpu_session, demucs_model_path};
 use anyhow::{anyhow, Result};
 use ndarray::Array3;
@@ -46,8 +46,7 @@ pub fn run_separation(file_path: &str, output_dir: Option<String>) -> Result<Vec
 
     let decoded = decode_audio_file(file_path)?;
     let (left_raw, right_raw) = decoded.to_stereo_planar();
-    let left = resample_linear(&left_raw, decoded.sample_rate, TARGET_SR);
-    let right = resample_linear(&right_raw, decoded.sample_rate, TARGET_SR);
+    let (left, right) = resample_hq_stereo(&left_raw, &right_raw, decoded.sample_rate, TARGET_SR);
     let total_len = left.len().min(right.len());
 
     // CoreML runs HTDemucs ~4x slower than CPU and its fp16 path yields NaN
@@ -117,7 +116,7 @@ pub fn run_separation(file_path: &str, output_dir: Option<String>) -> Result<Vec
 
     for (idx, stem_name) in STEM_NAMES.iter().enumerate() {
         let stem_file = out_dir.join(format!("{stem_name}.wav"));
-        write_stereo_wav(&stem_file, &stem_left[idx], &stem_right[idx], TARGET_SR)?;
+        write_stereo_wav_f32(&stem_file, &stem_left[idx], &stem_right[idx], TARGET_SR)?;
         let mono: Vec<f32> = stem_left[idx]
             .iter()
             .zip(stem_right[idx].iter())

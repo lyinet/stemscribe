@@ -1,6 +1,6 @@
 [package]
 name = "stemscribe"
-version = "0.9.16"
+version = "0.10.0"
 description = "StemScribe — macOS Apple Silicon AI Music Transcription, Cover Studio & Stage Workstation"
 license = "MIT"
 authors = ["StemScribe"]
@@ -35,6 +35,8 @@ midly = "0.5"
 midir = "0.10"
 
 reqwest = { version = "0.12", features = ["json", "stream", "multipart", "rustls-tls"] }
+rubato = "=5.1.0"
+realfft = "=3.5.1"
 
 [profile.release]
 panic = "unwind"

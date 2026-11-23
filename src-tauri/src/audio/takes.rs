@@ -1,4 +1,4 @@
-use crate::audio::{decode_audio_file, resample_linear, write_stereo_wav, StemMixInput};
+use crate::audio::{decode_audio_file, resample::resample_hq, write_stereo_wav, StemMixInput};
 use anyhow::{anyhow, Context, Result};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -131,8 +131,8 @@ pub fn mix_take_with_stems_wav(
             target_sr = decoded.sample_rate;
         }
         let (l_raw, r_raw) = decoded.to_stereo_planar();
-        let l = resample_linear(&l_raw, decoded.sample_rate, target_sr);
-        let r = resample_linear(&r_raw, decoded.sample_rate, target_sr);
+        let l = resample_hq(&l_raw, decoded.sample_rate, target_sr);
+        let r = resample_hq(&r_raw, decoded.sample_rate, target_sr);
 
         let len = l.len().min(r.len());
         if mix_l.len() < len {
@@ -152,8 +152,8 @@ pub fn mix_take_with_stems_wav(
 
     // Resample & latency-compensate the recorded overdub take
     let (tl_raw, tr_raw) = decoded_take.to_stereo_planar();
-    let tl_rs = resample_linear(&tl_raw, decoded_take.sample_rate, target_sr);
-    let tr_rs = resample_linear(&tr_raw, decoded_take.sample_rate, target_sr);
+    let tl_rs = resample_hq(&tl_raw, decoded_take.sample_rate, target_sr);
+    let tr_rs = resample_hq(&tr_raw, decoded_take.sample_rate, target_sr);
     let offset_samples = ((take_offset_ms as f64 / 1000.0) * target_sr as f64).round() as isize;
     let tl = apply_offset_samples(&tl_rs, offset_samples);
     let tr = apply_offset_samples(&tr_rs, offset_samples);

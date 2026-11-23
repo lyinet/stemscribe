@@ -3,7 +3,9 @@ pub mod chords;
 pub mod drums;
 pub mod key;
 pub mod midi_in;
+pub mod quality;
 pub mod reharmonize;
+pub mod resample;
 pub mod structure;
 pub mod takes;
 
@@ -320,6 +322,55 @@ pub fn write_stereo_wav(
     Ok(())
 }
 
+/// 32-bit float WAV (keeps full headroom for post-processing / stems).
+pub fn write_stereo_wav_f32(
+    path: &Path,
+    left: &[f32],
+    right: &[f32],
+    sample_rate: u32,
+) -> Result<()> {
+    let spec = WavSpec {
+        channels: 2,
+        sample_rate,
+        bits_per_sample: 32,
+        sample_format: SampleFormat::Float,
+    };
+    let mut writer = WavWriter::create(path, spec)?;
+    let len = left.len().min(right.len());
+    for i in 0..len {
+        writer.write_sample(left[i])?;
+        writer.write_sample(right[i])?;
+    }
+    writer.finalize()?;
+    Ok(())
+}
+
+/// 24-bit PCM WAV (delivery/export quality).
+pub fn write_stereo_wav_i24(
+    path: &Path,
+    left: &[f32],
+    right: &[f32],
+    sample_rate: u32,
+) -> Result<()> {
+    let spec = WavSpec {
+        channels: 2,
+        sample_rate,
+        bits_per_sample: 24,
+        sample_format: SampleFormat::Int,
+    };
+    let mut writer = WavWriter::create(path, spec)?;
+    let len = left.len().min(right.len());
+    let scale = (1i64 << 23) as f32;
+    for i in 0..len {
+        let l = (left[i].clamp(-1.0, 1.0) * scale) as i32;
+        let r = (right[i].clamp(-1.0, 1.0) * scale) as i32;
+        writer.write_sample(l)?;
+        writer.write_sample(r)?;
+    }
+    writer.finalize()?;
+    Ok(())
+}
+
 pub fn export_audio_slice_wav(
     file_path: &str,
     start_sec: f64,
@@ -361,24 +412,26 @@ pub fn export_mixed_stems_wav(
     inputs: &[StemMixInput],
     save_path: &str,
     target_peak_dbfs: Option<f32>,
+    source_sample_rate: Option<u32>,
 ) -> Result<String> {
     let active: Vec<&StemMixInput> = inputs.iter().filter(|s| s.enabled).collect();
     if active.is_empty() {
         return Err(anyhow!("请至少保留一条未静音的音轨再导出混音 WAV"));
     }
 
-    let mut target_sr = 44_100u32;
+    // Output rate = the source song rate when the caller passes it; otherwise
+    // fall back to the first stem's rate.
+    let mut target_sr = source_sample_rate.unwrap_or(44_100);
     let mut mix_l: Vec<f32> = Vec::new();
     let mut mix_r: Vec<f32> = Vec::new();
 
     for (idx, item) in active.iter().enumerate() {
         let decoded = decode_audio_file(&item.file_path)?;
-        if idx == 0 {
+        if idx == 0 && source_sample_rate.is_none() {
             target_sr = decoded.sample_rate;
         }
         let (l_raw, r_raw) = decoded.to_stereo_planar();
-        let l = resample_linear(&l_raw, decoded.sample_rate, target_sr);
-        let r = resample_linear(&r_raw, decoded.sample_rate, target_sr);
+        let (l, r) = resample::resample_hq_stereo(&l_raw, &r_raw, decoded.sample_rate, target_sr);
 
         let len = l.len().min(r.len());
         if mix_l.len() < len {
@@ -413,24 +466,6 @@ pub fn export_mixed_stems_wav(
     }
 
     let path = Path::new(save_path);
-    write_stereo_wav(path, &mix_l, &mix_r, target_sr)?;
+    write_stereo_wav_i24(path, &mix_l, &mix_r, target_sr)?;
     Ok(path.to_string_lossy().to_string())
-}
-
-pub fn resample_linear(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
-    if src_rate == dst_rate || input.is_empty() {
-        return input.to_vec();
-    }
-    let ratio = dst_rate as f64 / src_rate as f64;
-    let out_len = ((input.len() as f64) * ratio).round() as usize;
-    let mut out = Vec::with_capacity(out_len);
-    for i in 0..out_len {
-        let src_pos = (i as f64) / ratio;
-        let idx = src_pos.floor() as usize;
-        let frac = (src_pos - idx as f64) as f32;
-        let s0 = input.get(idx).copied().unwrap_or(0.0);
-        let s1 = input.get(idx + 1).copied().unwrap_or(s0);
-        out.push(s0 + (s1 - s0) * frac);
-    }
-    out
 }

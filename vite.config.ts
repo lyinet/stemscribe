@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react()],
   clearScreen: false,
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version as string),
+    __APP_VERSION__: JSON.stringify((pkg.displayVersion ?? pkg.version) as string),
   },
   server: {
     port: 1420,

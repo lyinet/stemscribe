@@ -1028,7 +1028,7 @@ export const App: React.FC = () => {
     });
     try {
       setStatusMsg("正在导出混音 WAV…");
-      const saved = await exportMixedWav(inputs, savePath);
+      const saved = await exportMixedWav(inputs, savePath, -1.0, audioMeta?.sample_rate);
       setStatusMsg(`已导出标准化混音 WAV：${saved}`);
     } catch (err) {
       setStatusMsg(`导出混音 WAV 失败: ${String(err)}`);

@@ -33,6 +33,7 @@ import type {
   StemScribeProject,
   SystemDiagnostics,
   TempoAndLoudness,
+  QualityReport,
   TranscriptionResult,
 } from "../types/music";
 
@@ -278,10 +279,50 @@ export async function exportAudioSliceWav(
 export async function exportMixedWav(
   inputs: StemMixInput[],
   savePath: string,
-  targetPeakDbfs = -1.0
+  targetPeakDbfs = -1.0,
+  sourceSampleRate?: number
 ): Promise<string> {
   if (!isTauriRuntime()) return savePath;
-  return invoke<string>("export_mixed_wav", { inputs, savePath, targetPeakDbfs });
+  return invoke<string>("export_mixed_wav", {
+    inputs,
+    savePath,
+    targetPeakDbfs,
+    sourceSampleRate: sourceSampleRate ?? null,
+  });
+}
+
+export async function analyzeAudioQuality(filePath: string): Promise<QualityReport> {
+  if (!isTauriRuntime()) {
+    return {
+      sample_rate: 44100,
+      channels: 2,
+      bit_depth: 16,
+      duration_sec: 240,
+      integrated_lufs: -9.5,
+      lra_lu: 6.2,
+      true_peak_dbtp: -0.8,
+      sample_peak_dbfs: -1.2,
+      cutoff_hz: null,
+      low_mid_excess_db: 0,
+      low_mid_center_hz: 0,
+      harsh_peaks: [],
+      stereo_correlation: 0.86,
+      side_mid_ratio_db: -11.5,
+      low_band_correlation: 0.94,
+      clipped_runs: 0,
+      dc_offset: [0, 0],
+      ltas: [],
+      issues: [
+        {
+          id: "mock",
+          severity: "ok",
+          title: "演示模式",
+          detail: "浏览器环境下返回占位报告",
+        },
+      ],
+    };
+  }
+  return invoke<QualityReport>("analyze_audio_quality", { filePath });
 }
 
 export async function saveRecordedTakeWav(

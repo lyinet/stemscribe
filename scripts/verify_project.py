@@ -25,6 +25,13 @@ def check_configs() -> str:
     v_tauri = tauri_cfg["version"]
     v_cargo = cargo["package"]["version"]
     assert v_pkg == v_tauri == v_cargo, f"Version mismatch: {v_pkg} vs {v_tauri} vs {v_cargo}"
+    display = pkg.get("displayVersion")
+    if display is not None:
+        parts = display.split(".")
+        assert len(parts) == 4 and all(p.isdigit() for p in parts), \
+            f"displayVersion must be 4-part numeric (0.<milestone>.<feature>.<fix>), got {display}"
+        assert ".".join(parts[:3]) == v_pkg, \
+            f"displayVersion {display} must start with semver {v_pkg}"
 
     for rel in ["tsconfig.json", "src-tauri/capabilities/default.json"]:
         json.loads((ROOT / rel).read_text(encoding="utf-8"))
@@ -36,7 +43,7 @@ def check_configs() -> str:
     ET.fromstring(plist_txt)
     assert "NSMicrophoneUsageDescription" in plist_txt, "Info.plist missing NSMicrophoneUsageDescription"
 
-    print(f"[PASS] Configs, Info.plist & unified version: v{v_pkg}")
+    print(f"[PASS] Configs, Info.plist & unified version: v{pkg.get("displayVersion", v_pkg)}")
     return v_pkg
 
 

@@ -105,13 +105,22 @@ async fn export_audio_slice_wav(
 }
 
 #[tauri::command]
+async fn analyze_audio_quality(file_path: String) -> Result<audio::quality::QualityReport, String> {
+    tokio::task::spawn_blocking(move || audio::quality::analyze_quality(&file_path))
+        .await
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn export_mixed_wav(
     inputs: Vec<StemMixInput>,
     save_path: String,
     target_peak_dbfs: Option<f32>,
+    source_sample_rate: Option<u32>,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        audio::export_mixed_stems_wav(&inputs, &save_path, target_peak_dbfs)
+        audio::export_mixed_stems_wav(&inputs, &save_path, target_peak_dbfs, source_sample_rate)
     })
     .await
     .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
@@ -554,6 +563,7 @@ pub fn run() {
             detect_drum_hits_local,
             export_audio_slice_wav,
             export_mixed_wav,
+            analyze_audio_quality,
             save_recorded_take_wav,
             mix_take_with_stems_wav,
             list_midi_inputs,

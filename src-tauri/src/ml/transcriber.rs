@@ -1,5 +1,5 @@
 use crate::audio::chords::ChordEvent;
-use crate::audio::{decode_audio_file, resample_linear};
+use crate::audio::{decode_audio_file, resample::resample_hq};
 use crate::ml::{basic_pitch_model_path, build_coreml_session, build_cpu_session};
 use anyhow::{anyhow, Result};
 use midly::num::{u15, u24, u28, u4, u7};
@@ -43,7 +43,7 @@ pub fn run_transcription(stem_path: &str, stem_name: &str) -> Result<Transcripti
     }
 
     let decoded = decode_audio_file(stem_path)?;
-    let mono = resample_linear(&decoded.to_mono(), decoded.sample_rate, BASIC_PITCH_SR);
+    let mono = resample_hq(&decoded.to_mono(), decoded.sample_rate, BASIC_PITCH_SR);
     if mono.is_empty() {
         return Err(anyhow!("音轨为空，无法转谱"));
     }

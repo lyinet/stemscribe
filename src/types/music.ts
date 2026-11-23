@@ -283,3 +283,42 @@ export interface HardwareMidiEvent {
   velocity: number;
   device_name: string;
 }
+
+export interface BandLevel {
+  hz: number;
+  db: number;
+}
+
+export interface QualityIssue {
+  id: string;
+  severity: "ok" | "warn" | "bad";
+  title: string;
+  detail: string;
+}
+
+export interface HarshPeak {
+  hz: number;
+  excess_db: number;
+}
+
+export interface QualityReport {
+  sample_rate: number;
+  channels: number;
+  bit_depth: number | null;
+  duration_sec: number;
+  integrated_lufs: number;
+  lra_lu: number;
+  true_peak_dbtp: number;
+  sample_peak_dbfs: number;
+  cutoff_hz: number | null;
+  low_mid_excess_db: number;
+  low_mid_center_hz: number;
+  harsh_peaks: HarshPeak[];
+  stereo_correlation: number;
+  side_mid_ratio_db: number;
+  low_band_correlation: number;
+  clipped_runs: number;
+  dc_offset: [number, number];
+  ltas: BandLevel[];
+  issues: QualityIssue[];
+}
