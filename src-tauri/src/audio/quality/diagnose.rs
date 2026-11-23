@@ -5,10 +5,10 @@ use super::loudness;
 use super::spectrum::{self, BandLevel};
 use crate::audio::decode_audio_file;
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Issue {
     pub id: String,
     pub severity: String, // "ok" | "warn" | "bad"
@@ -16,13 +16,13 @@ pub struct Issue {
     pub detail: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HarshPeak {
     pub hz: f32,
     pub excess_db: f32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualityReport {
     pub sample_rate: u32,
     pub channels: usize,

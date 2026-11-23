@@ -24,7 +24,7 @@ pub struct StemIn {
     pub file_path: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RestoreModules {
     pub vocal_cleanup: bool,
@@ -54,7 +54,7 @@ impl Default for RestoreModules {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RestoreSettings {
     /// 0.5 light / 1.0 standard / 1.5 strong.
@@ -574,8 +574,16 @@ pub fn run_restore(
         let mut d44_l: Vec<f32> = Vec::new();
         let mut d44_r: Vec<f32> = Vec::new();
         if stem_mode {
+            // Vocal stems first: `other` ducking needs the raw vocal stem
+            // as its sidechain reference no matter the input order.
+            let mut order: Vec<usize> = (0..req.stems.len()).collect();
+            order.sort_by_key(|&i| {
+                let n = &req.stems[i].name;
+                usize::from(!(n.contains("vocal") || n.contains("人声")))
+            });
             let mut vocals_pair: Option<(Vec<f32>, Vec<f32>)> = None;
-            for (idx, st) in req.stems.iter().enumerate() {
+            for (seq, &idx) in order.iter().enumerate() {
+                let st = &req.stems[idx];
                 let d = decode_audio_file(&st.file_path)
                     .map_err(|e| anyhow!("读取分轨 {} 失败: {e}", st.file_path))?;
                 let (sl, sr_) = d.to_stereo_planar();
@@ -584,6 +592,10 @@ pub fn run_restore(
                 let is_vocal = st.name.contains("vocal") || st.name.contains("人声");
                 let is_drum = st.name.contains("drum") || st.name.contains("鼓");
                 let is_bass = st.name.contains("bass") || st.name.contains("贝斯");
+                if is_vocal {
+                    // Sidechain = unprocessed stem (true vocal energy).
+                    vocals_pair = Some((sl44.clone(), sr44.clone()));
+                }
                 let vref = vocals_pair.as_ref().map(|(a, b)| (a.as_slice(), b.as_slice()));
                 let (pl, pr) = if is_vocal {
                     chain_vocals(&sl44, &sr44, s, m, dyn_scale)
@@ -594,9 +606,6 @@ pub fn run_restore(
                 } else {
                     chain_other(&sl44, &sr44, s, m, &before, vref, vocals_weak, &mut rnotes)
                 };
-                if is_vocal {
-                    vocals_pair = Some((pl.clone(), pr.clone()));
-                }
                 let len = sl44.len().min(sr44.len());
                 if d44_l.len() < len {
                     d44_l.resize(len, 0.0);
@@ -608,7 +617,7 @@ pub fn run_restore(
                 }
                 emit(
                     "stems",
-                    5.0 + 35.0 * (idx + 1) as f32 / req.stems.len().max(1) as f32,
+                    5.0 + 35.0 * (seq + 1) as f32 / req.stems.len().max(1) as f32,
                 );
             }
             drop(vocals_pair);
@@ -777,6 +786,9 @@ pub fn run_restore(
         0.0
     };
     emit("report", 100.0);
+    // De-duplicate notes (per-stem chains can emit the same message).
+    let mut seen = std::collections::HashSet::new();
+    notes.retain(|n| seen.insert(n.clone()));
     Ok(RestoreResult {
         output_path: out_path,
         sample_rate: work_rate,
@@ -993,4 +1005,102 @@ mod tests {
         assert_eq!(xcorr_lag(&l, &ol, c, 48000), 0, "restore lag L");
         assert_eq!(xcorr_lag(&r, &or_, c, 48000), 0, "restore lag R");
     }
+
+    /// Band energy ratio of `x` in [lo, hi] Hz vs its total.
+    fn band_energy_ratio(x: &[f32], sr: f64, lo: f64, hi: f64) -> f64 {
+        let mut hp = Biquad::high_pass(sr, lo, std::f64::consts::FRAC_1_SQRT_2);
+        let mut lp = Biquad::low_pass(sr, hi, std::f64::consts::FRAC_1_SQRT_2);
+        let mut e_band = 0.0f64;
+        let mut e_all = 0.0f64;
+        for &v in x {
+            let b = lp.tick(hp.tick(v as f64)) as f32;
+            e_band += (b as f64).powi(2);
+            e_all += (v as f64).powi(2);
+        }
+        e_band / e_all.max(1e-30)
+    }
+
+    #[test]
+    fn vocal_space_runs_with_vocals_last() {
+        // Stems in separator order (drums, bass, other, vocals): the
+        // vocal-space duck on `other` must still run — vocals are
+        // processed first and the sidechain is the raw vocal stem.
+        let dir = std::env::temp_dir().join("stemscribe_restore_vspace");
+        std::fs::create_dir_all(&dir).unwrap();
+        let tau = std::f64::consts::TAU;
+        let n = 44100usize * 2;
+        let write_stem = |name: &str, f: f64, amp: f64, quiet_tail: bool| -> String {
+            let p = dir.join(name);
+            let l: Vec<f32> = (0..n)
+                .map(|i| {
+                    let t = i as f64 / 44100.0;
+                    // Loud only for the first 20%: the p50 detector
+                    // threshold then sits ~20 dB below the loud level.
+                    let g = if quiet_tail && t >= 0.4 { 0.1 } else { 1.0 };
+                    (amp * g * (tau * f * t).sin()) as f32
+                })
+                .collect();
+            write_stereo_wav_f32(&p, &l, &l, 44100).unwrap();
+            p.to_string_lossy().to_string()
+        };
+        let stems: Vec<StemIn> = [
+            ("drums", write_stem("drums.wav", 150.0, 0.08, false)),
+            ("bass", write_stem("bass.wav", 80.0, 0.08, false)),
+            ("other", write_stem("other.wav", 2500.0, 0.12, false)),
+            ("vocals", write_stem("vocals.wav", 2000.0, 0.30, true)),
+        ]
+        .iter()
+        .map(|(name, file_path)| StemIn {
+            name: name.to_string(),
+            file_path: file_path.clone(),
+        })
+        .collect();
+        let src = dir.join("vs_src.wav");
+        let sl: Vec<f32> = (0..48000 * 2)
+            .map(|i| (0.1 * (tau * 700.0 * i as f64 / 48000.0).sin()) as f32)
+            .collect();
+        write_stereo_wav_f32(&src, &sl, &sl, 48000).unwrap();
+        let mk = |vocal_space: bool, out: &std::path::Path| RestoreRequest {
+            source_path: src.to_string_lossy().to_string(),
+            stems: stems.clone(),
+            settings: RestoreSettings {
+                strength: 1.0,
+                modules: RestoreModules {
+                    vocal_cleanup: false,
+                    shimmer: false,
+                    drum_punch: false,
+                    low_end: false,
+                    width: false,
+                    vocal_space,
+                    hf_restore: false,
+                    glue: false,
+                    loudness: false,
+                },
+                ..RestoreSettings::default()
+            },
+            output_path: Some(out.to_string_lossy().to_string()),
+        };
+        let a = run_restore(&mk(true, &dir.join("vs_on.wav")), |_, _| {}).unwrap();
+        assert!(
+            !a.notes.iter().any(|n| n.contains("人声过弱")),
+            "vocal_space must not be skipped: {:?}",
+            a.notes
+        );
+        let b = run_restore(&mk(false, &dir.join("vs_off.wav")), |_, _| {}).unwrap();
+        let da = decode_audio_file(&a.output_path).unwrap();
+        let db = decode_audio_file(&b.output_path).unwrap();
+        let (al, _) = da.to_stereo_planar();
+        let (bl, _) = db.to_stereo_planar();
+        let m = al.len().min(bl.len());
+        let diff: Vec<f32> = (0..m).map(|i| al[i] - bl[i]).collect();
+        let e: f64 = diff.iter().map(|v| (*v as f64).powi(2)).sum();
+        assert!(e > 1e-4, "vocal_space delta must be non-zero (e={e:e})");
+        let ratio = band_energy_ratio(&diff, 48000.0, 1000.0, 5000.0);
+        assert!(
+            ratio > 0.6,
+            "duck energy must concentrate in 1-5 kHz (ratio {ratio:.2})"
+        );
+    }
 }
+
+

@@ -5,8 +5,8 @@
 <h1 align="center">StemScribe</h1>
 
 <p align="center">
-  <b>把任何一首歌，变成你能弹、能唱、能练的工程。</b><br/>
-  macOS 原生 AI 扒带工作站 · 4 轨分离 · 自动扒谱 · 和弦识别 · 练习 & 翻唱 —— 全部在你的 Mac 上离线完成
+  <b>让 AI 生成的歌，听起来像录音棚做出来的。</b><br/>
+  macOS 原生 AI 歌曲音质修复 · 智能诊断 · 分轨修复 · 母带 · 24-bit 导出，外加扒谱、和弦、练习、翻唱，全部在你的 Mac 上离线完成
 </p>
 
 <p align="center">
@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="#下载安装">下载安装</a> ·
+  <a href="#一键修复-ai-歌曲音质">一键修复</a> ·
   <a href="#功能一览">功能一览</a> ·
   <a href="#性能">性能</a> ·
   <a href="#技术架构">技术架构</a> ·
@@ -28,26 +29,45 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hero.png" alt="StemScribe 主界面：多轨编排、和弦轨、段落轨与底部编辑器" width="100%" />
+  <img src="docs/screenshots/restore.png" alt="StemScribe 一键修复：诊断、频谱对比、等响度 A/B" width="100%" />
 </p>
 
 ---
 
 ## 为什么是 StemScribe
 
-想扒一首歌来弹唱、翻唱或者练琴，通常要来回折腾好几个工具：一个网站分离人声，一个软件扒谱，一个 App 查和弦，再开一个 DAW 慢速循环练习。音频要上传到别人的服务器，还经常按分钟收费。
+Suno、MiniMax 这些 AI 生成的歌，旋律和编曲已经很好听，但一传到音乐平台、戴上耳机就露馅：高频发闷或者发金属声，低中频浑浊，动态平得像一条线，响度也不达标。专业做法是导进 DAW 分轨、逐轨处理、再做母带，要会一堆插件，一首歌要花一两个小时。
 
-**StemScribe 把这一整条链路放进了一个经典 DAW 界面里**：拖入一首歌，点一次「一键扒带」，几分钟后你得到 —— 人声 / 鼓 / 贝斯 / 伴奏 4 条独立音轨、带级数的和弦轨、主歌副歌段落、BPM 和调性，以及可以直接编辑、导出成五线谱 / 吉他谱 / 简谱的旋律 MIDI。
+**StemScribe 把这套流程做成了一个按钮**：导入一首 AI 歌，点「一键修复」，它先诊断出具体问题，再用 AI 分轨逐轨修复、做母带，几分钟后给你一个 24-bit 的修复版，还能和原曲等响度 A/B 对比。
 
-- **完全本地**：AI 模型在你的 Mac 上运行，音频不会离开你的电脑，断网也能用。
-- **免费开源**：MIT 协议，没有订阅、没有按分钟计费、没有水印。
-- **一看就懂**：参考 Logic Pro / ACE Studio 的经典 DAW 布局——上面是走带，中间是音轨，下面是编辑器，设置都收进菜单。
+- **先诊断再修复**：响度、动态、真峰值、高频截止、低中频堆积、刺耳峰、立体声相位，用白话告诉你哪里有问题、修好了没有。
+- **只改该改的**：成品 = 原曲 + 各轨的修改量。没处理的部分和原曲一模一样，分轨产生的瑕疵也相互抵消。
+- **完全本地、免费开源**：AI 模型在你的 Mac 上运行，音频不上传；MIT 协议，没有订阅和水印。
 
-## 三步上手
+## 一键修复 AI 歌曲音质
 
-| 1. 拖入歌曲 | 2. 一键扒带 | 3. 练、改、唱 |
+| 1. 导入歌曲 | 2. 一键修复 | 3. 对比并导出 |
 | --- | --- | --- |
-| 把 MP3 / WAV / FLAC / M4A 拖进窗口，自动识别 BPM、调性和曲式段落 | AI 拆成 4 轨，识别全曲和弦，提取鼓点，把主旋律转成 MIDI | 变速不变调循环练习、看谱跟弹打分、静音人声叠录翻唱并导出成品 |
+| 拖入 WAV / MP3 / FLAC / M4A，自动诊断音质问题 | AI 分轨后逐轨修复人声、鼓、贝斯、伴奏，再做母带 | 原曲和修复版等响度无缝切换、可以盲听，满意后导出 24-bit WAV |
+
+| 处理 | 做了什么 |
+| --- | --- |
+| 人声 | 清理 2.5–9 kHz 刺耳共振、去齿音、跟随电平的压缩，人声更靠前 |
+| 鼓 | 增强瞬态冲击力，压掉 7–16 kHz 的镲片金属声 |
+| 贝斯 | 200 Hz 以下收成单声道，加谐波让小音箱也听得见 |
+| 伴奏 | 挖掉浑浊的低中频、适度加宽，人声出现时在 2.5 kHz 让位 |
+| 母带 | 诊断出的刺耳峰定点压制并复查、粘合压缩、低频单声道、补出截止频率以上的高频、真峰值限制到 −14 LUFS / −1 dBTP |
+
+实测（Apple M4，标准档）：
+
+| 歌曲 | 修复前 | 修复后 |
+| --- | --- | --- |
+| Suno Remastered 4 分 02 秒 | −15.7 LUFS · LRA 3.6 · 2 kHz 刺耳峰 | −14.0 LUFS · LRA 4.3 · 刺耳峰消除 |
+| MiniMax 3 分 28 秒（32 kHz 单声道） | −22.5 LUFS · 14 kHz 以上缺失 · 3.6 kHz 刺耳峰 +7.2 dB | −15.1 LUFS · 高频补齐 · 刺耳峰消除 |
+
+修复一首 4 分钟的歌约 40–50 秒（不含 AI 分轨，分轨约为歌曲时长的一半到三分之二），内存峰值约 1.3 GB。
+
+> 关于音乐平台的「录音室音质」标签：它是平台根据自己的发行渠道和处理给出的播放档位，StemScribe 没办法保证你的歌能拿到这个标签。我们能做的是把听感做好。
 
 ## 功能一览
 
@@ -136,17 +156,19 @@
 
 ## 性能
 
-实测于 **Apple M4** 芯片的 Mac，StemScribe v0.9.16 正式构建：
+实测于 **Apple M4** 芯片的 Mac，StemScribe v0.10.0.0 正式构建：
 
 | 任务 | 输入 | 耗时 |
 | --- | --- | --- |
 | 导入 + 波形 / BPM / 调性 / 段落分析 | 4 分 21 秒 MP3 | 约 1 秒 |
-| AI 4 轨分离（HTDemucs） | 85 秒歌曲 | 36 秒 |
-| AI 4 轨分离（HTDemucs） | 4 分 21 秒歌曲 | 约 2 分钟 |
+| AI 4 轨分离（HTDemucs） | 85 秒歌曲 | 约 1 分钟 |
+| AI 4 轨分离（HTDemucs） | 4 分 02 秒歌曲 | 约 1 分 50 秒 |
 | 人声转 MIDI（Basic Pitch） | 4 分 21 秒人声轨 | 4 秒（895 个音符） |
 | **一键扒带全流程**（分轨 + 和弦 + 鼓点 + 转谱） | 4 分 21 秒歌曲 | **2–3.5 分钟** |
+| 音质诊断 | 4 分钟 WAV | 约 1.5 秒 |
+| **一键修复**（分轨后的逐轨修复 + 母带） | 4 分 02 秒歌曲 | **约 46 秒** |
 
-> 分轨耗时约为歌曲时长的一半，期间界面可以正常操作。安装包仅约 10 MB，AI 模型首次使用时按需下载。
+> 分轨耗时约为歌曲时长的一半到三分之二，期间界面可以正常操作。安装包仅约 10 MB，AI 模型首次使用时按需下载。
 
 ## 下载安装
 
@@ -174,13 +196,14 @@
 
 | 操作 | 快捷键 | 操作 | 快捷键 |
 | --- | --- | --- | --- |
-| 播放 / 暂停 | `Space` | 命令面板 | `⌘ K` |
+| 一键修复音质 | `⌘ R` | 命令面板 | `⌘ K` |
+| 播放 / 暂停 | `Space` | 设置 | `⌘ ,` |
 | 导入音频 | `⌘ O` | 导入 MIDI | `⌘ I` |
 | 保存工程 | `⌘ S` | 导出 MIDI | `⌘ E` |
 | 设置循环起点 / 终点 | `[` / `]` | 添加书签 | `K` |
 | 撤销 / 重做修音 | `⌘ Z` / `⇧ ⌘ Z` | 1/16 量化 | `⌘ U` |
 | 演出提词器 | `F` / `⇧ ⌘ F` | 弹唱谱排版打印 | `⌘ P` |
-| 设置 | `⌘ ,` | 全部快捷键 | `?` |
+| 全部快捷键 | `?` | | |
 
 ## 技术架构
 
@@ -196,10 +219,14 @@ flowchart LR
     E[DSP 分析<br/>BPM · 调性 · 和弦 · 段落 · 鼓点]
     F[ONNX Runtime<br/>HTDemucs · Basic Pitch]
     G[工程 / MIDI / WAV 读写<br/>CoreMIDI 外接键盘]
+    Q[音质诊断<br/>BS.1770 响度 · 真峰值 · 频谱]
+    R[修复引擎<br/>逐轨修复 · 母带 · 限制器]
   end
   H[(可选：OpenAI 兼容大模型)]
   A <-- IPC --> D
-  D --> E & F
+  D --> E & F & Q
+  F --> R
+  Q --> R
   F --> G
   A --> B & C
   A -. 用户自配 Key .-> H
@@ -208,7 +235,7 @@ flowchart LR
 | 层 | 技术 |
 | --- | --- |
 | 桌面框架 | Tauri v2（原生 WebKit，安装包约 10 MB） |
-| 核心 | Rust 2021 · Symphonia · Hound · Midly · Midir（CoreMIDI） |
+| 核心 | Rust 2021 · Symphonia · Hound · Rubato（sinc 重采样）· RealFFT · Midly · Midir（CoreMIDI） |
 | AI 推理 | ONNX Runtime（`ort`）· HTDemucs · Basic Pitch |
 | 界面 | React 19 · TypeScript · Vite · VexFlow · Lucide |
 | 音频 | Web Audio API（多轨混音、EQ、卷积混响、节拍器、合成器） |
@@ -224,6 +251,8 @@ src/                      React 前端
   lib/                    IPC 封装、Web Audio 引擎、录音、乐理工具
 src-tauri/src/
   audio/                  解码与 DSP 分析（BPM / 调性 / 和弦 / 段落 / 鼓点）
+  audio/quality/          响度（BS.1770-4）、LRA、真峰值、频谱与音质诊断
+  audio/dsp/ + restore.rs 修复引擎：EQ、动态 EQ、频谱共振抑制、压缩、饱和、激励器、真峰值限制器
   ml/                     HTDemucs 分轨、Basic Pitch 转谱、模型下载与校验
   llm/                    OpenAI 兼容大模型中转
   project/                工程、练习记录、歌单、录音存档
@@ -251,6 +280,10 @@ npm run build:mac      # 打包 .app 与 .dmg（Apple Silicon）
 
 ## 路线图
 
+- [x] **v0.10 一键修复 AI 歌曲音质**：音质诊断、分轨逐轨修复、母带、等响度 A/B 与盲听、24-bit 导出
+- [ ] **v0.11 参考曲匹配**：选一首你喜欢的歌，把频响、响度、立体声宽度往它靠
+- [ ] **v0.11 鼓替换**：用识别出的鼓点触发真实鼓采样（CC0 授权）
+- [ ] **v0.12 AI 修复模型**：评估 Apollo / UniverSR 补高频、BS-RoFormer 更干净的分轨
 - [x] 经典 DAW 界面：走带 / 多轨编排 / 底部编辑器 / 独立设置页
 - [x] 本地 HTDemucs 4 轨分离 + Basic Pitch 扒谱，模型一键下载与校验
 - [x] 和弦 / 调性 / BPM / 段落识别，和弦风格重配
@@ -316,7 +349,9 @@ StemScribe 站在这些优秀开源项目的肩膀上：
 
 ## English
 
-**StemScribe** is a native macOS (Apple Silicon) AI music workstation that turns any song into a playable, editable project — fully offline.
+**StemScribe** is a native macOS (Apple Silicon) app that makes AI-generated songs (Suno, MiniMax, …) sound closer to a studio production — fully offline.
+
+- **One-click restoration**: diagnoses loudness, dynamics, true peak, HF cutoff, low-mid build-up, harsh resonances and stereo issues; separates stems and repairs each one (vocal resonance/de-ess, drum transients and cymbal shimmer, bass mono, muddy backing), then masters to −14 LUFS / −1 dBTP with HF restoration above the detected cutoff. Output = original + per-stem changes, so untouched content stays bit-identical. Loudness-matched A/B with blind mode, 24-bit export.
 
 - **4-stem separation** (vocals / drums / bass / other) with Meta's HTDemucs, running locally via ONNX Runtime
 - **Audio-to-MIDI transcription** with Spotify's Basic Pitch, with piano-roll editing and score / guitar / numbered-notation export (MIDI, MusicXML, PDF)

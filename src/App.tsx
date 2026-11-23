@@ -45,6 +45,7 @@ import { ShortcutsModal } from "./components/ShortcutsModal";
 import { StageModeOverlay } from "./components/StageModeOverlay";
 import { SettingsModal, type SettingsSection } from "./components/SettingsModal";
 import { Arrangement, type ArrangementTrack } from "./components/daw/Arrangement";
+import { RestorePanel } from "./components/restore/RestorePanel";
 import { MixerPanel, type MixPresetId } from "./components/daw/MixerPanel";
 import { TransportBar } from "./components/daw/TransportBar";
 import {
@@ -57,6 +58,7 @@ import { createDemoStudioBundle } from "./lib/demoStudio";
 import { chordToMidiVoicing, keyPrefersFlats, parseChordSymbol } from "./lib/musicTheory";
 import {
   analyzeArrangementWithLlm,
+  analyzeAudioQuality,
   askConfirm,
   deleteSetlist,
   detectBpmLocal,
@@ -80,6 +82,7 @@ import {
   inspectAudioFile,
   deletePracticeRecord,
   exportPracticeRecordsCsv,
+  exportRestoredWav,
   listPracticeRecords,
   deleteRecordedTake,
   listRecordedTakes,
@@ -89,6 +92,7 @@ import {
   mixTakeWithStemsWav,
   onMacosMenuAction,
   onNativeFileDrop,
+  onRestoreProgress,
   pickAudioFile,
   pickDirectory,
   pickHtmlSavePath,
@@ -102,6 +106,7 @@ import {
   pickWavSavePath,
   refineMidiWithLlm,
   reharmonizeChordsLocal,
+  restoreAudio,
   savePracticeRecord,
   deleteProjectFile,
   renameProjectFile,
@@ -136,9 +141,15 @@ import type {
   StemOutput,
   StemScribeProject,
   TempoAndLoudness,
+  QualityReport,
+  RestoreProgress,
+  RestoreResult,
+  RestoreSettings,
 } from "./types/music";
+import { DEFAULT_RESTORE_SETTINGS } from "./types/music";
 
 type StudioTab =
+  | "restore"
   | "score"
   | "chords"
   | "drums"
@@ -160,6 +171,10 @@ const STEM_COLORS: Record<string, string> = {
 const EDITOR_MIN_H = 180;
 
 const EDITOR_TAB_GROUPS: Array<{ label: string; tabs: Array<{ id: StudioTab; label: string }> }> = [
+  {
+    label: "母带",
+    tabs: [{ id: "restore", label: "修复" }],
+  },
   {
     label: "编辑",
     tabs: [
@@ -290,6 +305,11 @@ export const App: React.FC = () => {
   const [redoStack, setRedoStack] = useState<MidiNote[][]>([]);
 
   const [separating, setSeparating] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState<RestoreProgress | null>(null);
+  const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null);
+  const [restoreSettings, setRestoreSettings] = useState<RestoreSettings>(DEFAULT_RESTORE_SETTINGS);
+  const [qualityBefore, setQualityBefore] = useState<QualityReport | null>(null);
   const [autoPipelining, setAutoPipelining] = useState(false);
   const [detectingChords, setDetectingChords] = useState(false);
   const [detectingStructure, setDetectingStructure] = useState(false);
@@ -473,6 +493,8 @@ export const App: React.FC = () => {
     demoBlobUrlsRef.current = demo.blobUrls;
 
     setAudioMeta(demo.audioMeta);
+    setRestoreResult(null);
+    setQualityBefore(null);
     setTempoInfo(demo.tempoInfo);
     setKeyEst(demo.keyEst);
     setStructure(demo.structure);
@@ -521,6 +543,8 @@ export const App: React.FC = () => {
         setStatusMsg("正在分析音频…");
         const meta = await inspectAudioFile(path);
         setAudioMeta(meta);
+        setRestoreResult(null);
+        setQualityBefore(null);
         setStems([]);
         setChords([]);
         setOriginalChordsBackup(null);
@@ -600,6 +624,14 @@ export const App: React.FC = () => {
     });
   }, [progressiveRampEnabled]);
 
+  // The restore panel needs ~400px for its three columns + A/B bar.
+  useEffect(() => {
+    if (studioTab === "restore" && editorOpen) {
+      const maxH = Math.max(EDITOR_MIN_H, window.innerHeight - 280);
+      setEditorHeight((h) => Math.min(maxH, Math.max(h, 400)));
+    }
+  }, [studioTab, editorOpen]);
+
   const transposedScale = useMemo(() => {
     if (!keyEst) return undefined;
     return keyEst.scale_pitch_classes.map((pc) => (pc + transposeSemitones + 120) % 12);
@@ -631,6 +663,15 @@ export const App: React.FC = () => {
       loop_b: loopB,
       notes: transposedNotes,
       analysis,
+      restoration: restoreResult
+        ? {
+            output_path: restoreResult.output_path,
+            settings: restoreSettings,
+            before: restoreResult.before,
+            after: restoreResult.after,
+            notes: restoreResult.notes,
+          }
+        : null,
     };
   }, [
     audioMeta,
@@ -645,6 +686,8 @@ export const App: React.FC = () => {
     loopB,
     transposedNotes,
     analysis,
+    restoreResult,
+    restoreSettings,
   ]);
 
   const handleExportLeadSheetHtml = async (input: LeadSheetInput) => {
@@ -795,6 +838,25 @@ export const App: React.FC = () => {
       setUndoStack([]);
       setRedoStack([]);
       setAnalysis(p.analysis);
+      if (p.restoration) {
+        setRestoreResult({
+          output_path: p.restoration.output_path,
+          sample_rate: p.restoration.after.sample_rate,
+          bit_depth: p.restoration.after.bit_depth ?? 24,
+          before: p.restoration.before,
+          after: p.restoration.after,
+          loudness_match_db:
+            p.restoration.before.integrated_lufs - p.restoration.after.integrated_lufs,
+          limiter_avg_gr_db: 0,
+          notes: p.restoration.notes,
+          elapsed_ms: 0,
+        });
+        setQualityBefore(p.restoration.before);
+        setRestoreSettings(p.restoration.settings);
+      } else {
+        setRestoreResult(null);
+        setQualityBefore(null);
+      }
       setShowProjectsMenu(false);
       setIsPlaying(false);
       setCurrentTime(0);
@@ -1047,6 +1109,9 @@ export const App: React.FC = () => {
           break;
         case "open_command_palette":
           setShowCommandPalette((v) => !v);
+          break;
+        case "restore_audio":
+          handleRestoreRef.current();
           break;
         case "load_demo_song":
           handleLoadDemoSong();
@@ -1394,17 +1459,9 @@ export const App: React.FC = () => {
     return false;
   };
 
-  const handleSeparateStems = async () => {
-    if (!audioMeta) return;
-    if (isDemoBlobPath(audioMeta.file_path)) {
-      setStatusMsg("内置演示曲已自带 4 条独立音轨，无需再次分轨。");
-      return;
-    }
-    if (!(await ensureModelInstalled("demucs"))) return;
-    setSeparating(true);
-    setStatusMsg("正在 AI 4 轨分离（耗时约为歌曲时长的一半）...");
-    try {
-      const res = await separateStems(audioMeta.file_path);
+  const performSeparation = useCallback(
+    async (filePath: string): Promise<StemOutput[]> => {
+      const res = await separateStems(filePath);
       setStems(res);
       const initMixer: Record<string, StemMixerState> = {};
       for (const s of res) {
@@ -1415,11 +1472,100 @@ export const App: React.FC = () => {
       engineRef.current?.applyMixer(initMixer);
       engineRef.current?.setMasterEq(eq);
       engineRef.current?.setReverb(reverbPreset, reverbWet);
+      return res;
+    },
+    [eq, reverbPreset, reverbWet]
+  );
+
+  const handleSeparateStems = async () => {
+    if (!audioMeta) return;
+    if (isDemoBlobPath(audioMeta.file_path)) {
+      setStatusMsg("内置演示曲已自带 4 条独立音轨，无需再次分轨。");
+      return;
+    }
+    if (!(await ensureModelInstalled("demucs"))) return;
+    setSeparating(true);
+    setStatusMsg("正在 AI 4 轨分离（耗时约为歌曲时长的一半到三分之二）...");
+    try {
+      await performSeparation(audioMeta.file_path);
       setStatusMsg("4 轨分离完成");
     } catch (err) {
       setStatusMsg(`分轨失败: ${String(err)}`);
     } finally {
       setSeparating(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!audioMeta || restoring) return;
+    if (isDemoBlobPath(audioMeta.file_path)) {
+      setStatusMsg("演示曲不支持修复，请导入自己的歌曲。");
+      return;
+    }
+    setStudioTab("restore");
+    setEditorOpen(true);
+    try {
+      let before = qualityBefore;
+      if (!before) {
+        setStatusMsg("音质诊断中…");
+        before = await analyzeAudioQuality(audioMeta.file_path);
+        setQualityBefore(before);
+      }
+      let useStems = stems;
+      if (useStems.length === 0) {
+        const yes = await askConfirm(
+          "先用 AI 分轨再修复，效果更好（耗时约为歌曲时长的一半到三分之二）。要先分轨吗？",
+          "一键修复"
+        );
+        if (yes && (await ensureModelInstalled("demucs"))) {
+          setSeparating(true);
+          setStatusMsg("正在 AI 4 轨分离（耗时约为歌曲时长的一半到三分之二）...");
+          try {
+            useStems = await performSeparation(audioMeta.file_path);
+          } finally {
+            setSeparating(false);
+          }
+        }
+      }
+      setRestoring(true);
+      setRestoreProgress({ stage: "analyze", percent: 0 });
+      const unlisten = await onRestoreProgress(setRestoreProgress);
+      try {
+        const res = await restoreAudio({
+          source_path: audioMeta.file_path,
+          stems: useStems.map((s) => ({ name: s.name, file_path: s.file_path })),
+          settings: restoreSettings,
+          output_path: null,
+        });
+        setRestoreResult(res);
+        setQualityBefore(res.before);
+        setStatusMsg(`修复完成：${res.output_path.split("/").pop()}`);
+      } finally {
+        unlisten();
+        setRestoring(false);
+        setRestoreProgress(null);
+      }
+    } catch (err) {
+      setRestoring(false);
+      setRestoreProgress(null);
+      setStatusMsg(`修复失败: ${String(err)}`);
+    }
+  };
+
+  const handleRestoreRef = useRef(handleRestore);
+  handleRestoreRef.current = handleRestore;
+
+  const handleExportRestored = async (bitDepth: 24 | 16) => {
+    if (!restoreResult) return;
+    const base = (audioMeta?.file_name || "song").replace(/\.[^.]+$/, "");
+    const savePath = await pickWavSavePath(`${base}_修复版.wav`);
+    if (!savePath) return;
+    try {
+      setStatusMsg("正在导出…");
+      const out = await exportRestoredWav(restoreResult.output_path, savePath, bitDepth);
+      setStatusMsg(`已导出修复版 WAV（${bitDepth}-bit）：${out}`);
+    } catch (err) {
+      setStatusMsg(`导出失败: ${String(err)}`);
     }
   };
 
@@ -1605,6 +1751,7 @@ export const App: React.FC = () => {
     { id: "import_lrc", category: "文件", label: "导入本地 LRC 歌词时间轴 (.lrc)...", run: handleImportLrc },
     { id: "export_srt", category: "导出", label: "导出翻唱视频标准字幕 (.srt)", disabled: lyrics.length === 0, run: handleExportSrt },
     { id: "export_practice_csv", category: "导出", label: "导出练琴成长历史日志 (.csv)", disabled: practiceRecords.length === 0, run: handleExportPracticeCsv },
+    { id: "restore", category: "AI 引擎", label: "一键修复音质（分轨修复 + 母带导出）", shortcut: "Cmd+R", disabled: !audioMeta, run: handleRestore },
     { id: "auto_pipe", category: "AI 引擎", label: "一键全自动扒带（4轨+和弦+曲式+鼓组+转谱）", disabled: !audioMeta, run: handleSmartAutoPipeline },
     { id: "stage", category: "舞台", label: "进入 / 退出全屏演出提词器模式", shortcut: "F", disabled: !audioMeta, run: () => setStageModeOpen((v) => !v) },
     { id: "setlist", category: "舞台", label: "打开演出歌单 / Setlist 管理", shortcut: "Cmd+L", run: () => setShowSetlistModal(true) },
@@ -1668,8 +1815,23 @@ export const App: React.FC = () => {
   )?.label;
 
   const pipelineStep = autoPipelining ? statusMsg.match(/(\d)\/4/)?.[1] : null;
-  const busyLabel = separating
-    ? "AI 分轨中"
+  const busyLabel = restoring
+    ? restoreProgress
+      ? `修复中 · ${
+          (
+            {
+              analyze: "诊断",
+              stems: "分轨处理",
+              master: "母带",
+              limit: "限幅",
+              write: "写盘",
+              report: "报告",
+            } as Record<string, string>
+          )[restoreProgress.stage] ?? restoreProgress.stage
+        }`
+      : "修复中"
+    : separating
+      ? "AI 分轨中"
     : autoPipelining
       ? pipelineStep
         ? `扒带 ${pipelineStep}/4`
@@ -1764,7 +1926,25 @@ export const App: React.FC = () => {
           </button>
           <button
             className="btn btn-primary"
-            disabled={!audioMeta || autoPipelining || separating}
+            disabled={
+              !audioMeta ||
+              restoring ||
+              autoPipelining ||
+              separating ||
+              isDemoBlobPath(audioMeta?.file_path)
+            }
+            onClick={handleRestore}
+            title={
+              audioMeta && isDemoBlobPath(audioMeta.file_path)
+                ? "演示曲不支持修复，请导入自己的歌曲"
+                : "一键修复音质：分轨修复 + 母带处理 + 24-bit 导出"
+            }
+          >
+            <Sparkles size={14} /> {restoring ? "修复中..." : "一键修复"}
+          </button>
+          <button
+            className="btn"
+            disabled={!audioMeta || autoPipelining || separating || restoring}
             onClick={handleSmartAutoPipeline}
             title="自动完成：AI 分 4 轨 → 识别和弦/调性/段落 → 鼓组 → 主旋律扒谱"
           >
@@ -1912,10 +2092,8 @@ export const App: React.FC = () => {
                 <div className="empty-icon">
                   <Music size={26} />
                 </div>
-                <h2>导入一首歌，开始扒带</h2>
-                <p>
-                  支持 MP3 / WAV / FLAC / M4A，可直接从访达拖进窗口。AI 会把歌曲拆成人声、鼓、贝斯、伴奏 4 轨，并自动识别和弦、段落和旋律。
-                </p>
+                <h2>导入一首 AI 歌，一键修复音质</h2>
+                <p>分轨修复 · 母带 · 24-bit 导出，全部在本机完成。</p>
                 <div className="empty-actions">
                   <button className="btn btn-primary btn-lg" onClick={handleOpenAudio}>
                     <FolderOpen size={16} /> 导入音频
@@ -1932,10 +2110,10 @@ export const App: React.FC = () => {
                     <b>1</b>导入歌曲
                   </li>
                   <li>
-                    <b>2</b>点「一键扒带」
+                    <b>2</b>一键修复
                   </li>
                   <li>
-                    <b>3</b>在下方看谱、编辑、跟弹
+                    <b>3</b>对比试听并导出
                   </li>
                 </ol>
               </div>
@@ -1972,6 +2150,30 @@ export const App: React.FC = () => {
             {editorOpen && (
               <div className="editor-body">
             <ErrorBoundary compact resetKey={studioTab} label={activeTabLabel}>
+          {studioTab === "restore" && (
+            <RestorePanel
+              before={qualityBefore}
+              result={restoreResult}
+              settings={restoreSettings}
+              onSettingsChange={setRestoreSettings}
+              running={restoring}
+              progress={restoreProgress}
+              onRun={handleRestore}
+              onExport={handleExportRestored}
+              sourcePath={
+                audioMeta && !isDemoBlobPath(audioMeta.file_path) ? audioMeta.file_path : null
+              }
+              sourceDuration={audioMeta?.duration_sec ?? 0}
+              mainIsPlaying={isPlaying}
+              onAbPlayingChange={(playing) => {
+                if (playing) {
+                  engineRef.current?.pause();
+                  setIsPlaying(false);
+                }
+              }}
+            />
+          )}
+
           {studioTab === "falling" && (
             <FallingNotesView
               notes={transposedNotes}

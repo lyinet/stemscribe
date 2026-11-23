@@ -220,6 +220,7 @@ export interface StemScribeProject {
   loop_b: number;
   notes: MidiNote[];
   analysis: ArrangementAnalysis | null;
+  restoration?: ProjectRestoration | null;
 }
 
 export interface ProjectSummary {
@@ -401,3 +402,12 @@ export const DEFAULT_RESTORE_SETTINGS: RestoreSettings = {
   ceiling_dbtp: -1.0,
   bit_depth: 24,
 };
+
+/** Persisted restoration render, stored inside a saved project. */
+export interface ProjectRestoration {
+  output_path: string;
+  settings: RestoreSettings;
+  before: QualityReport;
+  after: QualityReport;
+  notes: string[];
+}

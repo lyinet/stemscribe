@@ -101,14 +101,18 @@ pub fn setup_macos_menu<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
         .item(&toggle_stage)
         .build()?;
 
+    let restore_audio = MenuItemBuilder::with_id("restore_audio", "一键修复音质...")
+        .accelerator("CmdOrCtrl+R")
+        .build(app)?;
     let open_palette = MenuItemBuilder::with_id("open_command_palette", "全局快捷命令面板...")
         .accelerator("CmdOrCtrl+K")
         .build(app)?;
     let model_manager = MenuItemBuilder::with_id("open_models", "本地 ONNX 模型管理器...")
         .build(app)?;
     let tools_menu = SubmenuBuilder::new(app, "工具")
-        .item(&open_palette)
+        .item(&restore_audio)
         .separator()
+        .item(&open_palette)
         .item(&model_manager)
         .build()?;
 

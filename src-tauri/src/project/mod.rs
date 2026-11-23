@@ -41,6 +41,18 @@ pub struct StemScribeProject {
     pub loop_b: f64,
     pub notes: Vec<MidiNote>,
     pub analysis: Option<ArrangementAnalysis>,
+    #[serde(default)]
+    pub restoration: Option<ProjectRestoration>,
+}
+
+/// Persisted result of the last audio-restoration render for this project.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectRestoration {
+    pub output_path: String,
+    pub settings: crate::audio::restore::RestoreSettings,
+    pub before: crate::audio::quality::diagnose::QualityReport,
+    pub after: crate::audio::quality::diagnose::QualityReport,
+    pub notes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -279,6 +291,7 @@ mod tests {
                 confidence: 0.95,
             }],
             analysis: None,
+            restoration: None,
         };
 
         let out = export_practice_bundle(&proj, Some("C Major"), tmp.to_str().unwrap()).unwrap();

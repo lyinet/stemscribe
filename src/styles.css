@@ -2108,3 +2108,281 @@ input[type="range"]:not(.eq-fader):disabled::-webkit-slider-thumb {
   max-width: 100%;
   max-height: 160px;
 }
+
+/* ---------- Restore panel (母带 · 修复) ---------- */
+.restore-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 16px 14px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.rp-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.1fr) minmax(260px, 1.2fr) minmax(280px, 1fr);
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+.rp-col {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  overflow-y: auto;
+}
+
+.rp-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+.rp-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+.rp-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.rp-metric-label {
+  width: 52px;
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.rp-metric-val {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+.rp-metric-val.after {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.rp-arrow {
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.rp-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.rp-issue {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.rp-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rp-issue-title {
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--hairline);
+}
+
+.rp-tag.ok { color: var(--green); }
+.rp-tag.warn { color: var(--amber); }
+.rp-tag.new { color: var(--rose); }
+
+.rp-spectrum {
+  width: 100%;
+  height: 120px;
+  flex-shrink: 0;
+  color: var(--text);
+  background: var(--lane);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+}
+
+.rp-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.rp-swatch {
+  width: 10px;
+  height: 2px;
+  display: inline-block;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.rp-legend .rp-swatch:first-child { margin-left: 0; }
+
+.rp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rp-label {
+  width: 32px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.rp-run {
+  align-self: flex-start;
+}
+
+.rp-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rp-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--hairline);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.rp-progress-bar > div {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.25s ease;
+}
+
+.rp-progress-label {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.rp-adv summary {
+  font-size: 12px;
+  color: var(--text-3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rp-modules {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 10px;
+  margin-top: 6px;
+}
+
+.rp-module {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rp-notes {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+
+.rp-ab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+}
+
+.rp-ab-export {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.rp-ab-export .rp-label {
+  width: auto;
+}
+
+.rp-ab-seek {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
+
+.rp-ab-time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.rp-ab-match {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.rp-blind {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.rp-reveal {
+  font-size: 11px;
+  color: var(--amber);
+  white-space: nowrap;
+}

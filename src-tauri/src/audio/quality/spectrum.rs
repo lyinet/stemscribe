@@ -2,11 +2,11 @@
 //! overlap, on the mid channel), aggregated into 1/6-octave bands.
 
 use realfft::RealFftPlanner;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub const FFT_SIZE: usize = 8192;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BandLevel {
     pub hz: f32,
     pub db: f32,
@@ -88,6 +88,19 @@ pub fn sixth_octave_bands(psd: &[f64], rate: u32) -> Vec<BandLevel> {
         }
         let db = if cnt > 0 && sum > 0.0 {
             10.0 * (sum / cnt as f64).log10()
+        } else if cnt == 0 && !psd.is_empty() {
+            // Band narrower than the FFT bin spacing: take the PSD
+            // interpolated at the band centre instead of flooring out.
+            let x = fc / bin_hz;
+            let i0 = (x.floor() as usize).min(psd.len() - 1);
+            let i1 = (i0 + 1).min(psd.len() - 1);
+            let t = x - i0 as f64;
+            let p = psd[i0] + (psd[i1] - psd[i0]) * t;
+            if p > 0.0 {
+                10.0 * p.log10()
+            } else {
+                -160.0
+            }
         } else {
             -160.0
         };

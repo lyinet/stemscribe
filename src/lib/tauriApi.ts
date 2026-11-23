@@ -34,6 +34,7 @@ import type {
   SystemDiagnostics,
   TempoAndLoudness,
   QualityReport,
+  RestoreProgress,
   RestoreRequest,
   RestoreResult,
   TranscriptionResult,
@@ -293,36 +294,13 @@ export async function exportMixedWav(
   });
 }
 
+const MOCK_QUALITY_BEFORE: QualityReport = {"sample_rate":48000,"channels":2,"bit_depth":16,"duration_sec":242.0,"integrated_lufs":-15.735997486461455,"lra_lu":3.5350975985003465,"true_peak_dbtp":-3.9018450246620433,"sample_peak_dbfs":-3.9019180428409213,"cutoff_hz":20500.0,"low_mid_excess_db":0.0,"low_mid_center_hz":0.0,"harsh_peaks":[{"hz":2031.8733,"excess_db":2.8478203}],"stereo_correlation":0.72692496,"side_mid_ratio_db":-8.008936,"low_band_correlation":0.9247654,"clipped_runs":0,"dc_offset":[5.7006942e-05,-1.8411336e-05],"ltas":[{"hz":20.0,"db":-62.734646},{"hz":22.449242,"db":-60.019314},{"hz":25.198421,"db":-55.019695},{"hz":28.284271,"db":-50.88438},{"hz":31.74802,"db":-47.3725},{"hz":35.63595,"db":-44.890163},{"hz":40.0,"db":-40.561455},{"hz":44.898483,"db":-36.551014},{"hz":50.396843,"db":-36.004993},{"hz":56.568542,"db":-39.251087},{"hz":63.49604,"db":-41.004078},{"hz":71.2719,"db":-41.202526},{"hz":80.0,"db":-41.307877},{"hz":89.79697,"db":-43.485344},{"hz":100.793686,"db":-43.12896},{"hz":113.137085,"db":-43.228302},{"hz":126.99208,"db":-42.630886},{"hz":142.5438,"db":-42.943844},{"hz":160.0,"db":-42.992573},{"hz":179.59393,"db":-40.171818},{"hz":201.58737,"db":-44.727413},{"hz":226.27417,"db":-47.459293},{"hz":253.98416,"db":-48.246143},{"hz":285.0876,"db":-48.59131},{"hz":320.0,"db":-49.04398},{"hz":359.18787,"db":-50.768265},{"hz":403.17474,"db":-51.5362},{"hz":452.54834,"db":-49.864746},{"hz":507.96832,"db":-47.987988},{"hz":570.1752,"db":-47.89499},{"hz":640.0,"db":-45.741627},{"hz":718.37573,"db":-49.16629},{"hz":806.3495,"db":-50.000977},{"hz":905.0967,"db":-48.512928},{"hz":1015.93665,"db":-47.761974},{"hz":1140.3503,"db":-52.892},{"hz":1280.0,"db":-51.0714},{"hz":1436.7515,"db":-53.078228},{"hz":1612.699,"db":-56.785767},{"hz":1810.1934,"db":-55.749714},{"hz":2031.8733,"db":-55.00527},{"hz":2280.7007,"db":-57.13105},{"hz":2560.0,"db":-58.18976},{"hz":2873.503,"db":-61.08628},{"hz":3225.398,"db":-61.5925},{"hz":3620.3867,"db":-61.285202},{"hz":4063.7466,"db":-63.564713},{"hz":4561.4014,"db":-64.112564},{"hz":5120.0,"db":-64.931274},{"hz":5747.006,"db":-64.096886},{"hz":6450.796,"db":-64.32563},{"hz":7240.7734,"db":-65.63939},{"hz":8127.493,"db":-67.72282},{"hz":9122.803,"db":-68.6174},{"hz":10240.0,"db":-69.047485},{"hz":11494.012,"db":-70.53763},{"hz":12901.592,"db":-73.60428},{"hz":14481.547,"db":-76.80292},{"hz":16254.986,"db":-80.08283},{"hz":18245.605,"db":-82.73512},{"hz":20480.0,"db":-90.89861},{"hz":22988.023,"db":-115.82396}],"issues":[{"id":"harsh_peaks","severity":"warn","title":"2–8 kHz 存在刺耳峰（最强 2.0 kHz +2.8 dB）","detail":"2.0 kHz +2.8 dB"},{"id":"lra_flat","severity":"warn","title":"动态偏平（LRA 3.5 LU）","detail":"响度起伏小，音乐听起来容易僵硬、缺乏呼吸感"}]};
+
+const MOCK_QUALITY_AFTER: QualityReport = {"sample_rate":48000,"channels":2,"bit_depth":24,"duration_sec":242.0,"integrated_lufs":-14.02209782600805,"lra_lu":4.326994332640114,"true_peak_dbtp":-1.0299998572773474,"sample_peak_dbfs":-1.0783517150672877,"cutoff_hz":20500.0,"low_mid_excess_db":0.24061899,"low_mid_center_hz":201.58737,"harsh_peaks":[],"stereo_correlation":0.7477883,"side_mid_ratio_db":-8.405752,"low_band_correlation":0.99425304,"clipped_runs":0,"dc_offset":[8.2960435e-07,8.030998e-07],"ltas":[{"hz":20.0,"db":-64.814186},{"hz":22.449242,"db":-61.295334},{"hz":25.198421,"db":-55.09809},{"hz":28.284271,"db":-50.67521},{"hz":31.74802,"db":-46.43057},{"hz":35.63595,"db":-43.71859},{"hz":40.0,"db":-39.121193},{"hz":44.898483,"db":-35.170723},{"hz":50.396843,"db":-34.49997},{"hz":56.568542,"db":-37.547913},{"hz":63.49604,"db":-39.235535},{"hz":71.2719,"db":-39.46464},{"hz":80.0,"db":-39.44821},{"hz":89.79697,"db":-41.21171},{"hz":100.793686,"db":-41.08293},{"hz":113.137085,"db":-41.35359},{"hz":126.99208,"db":-40.79808},{"hz":142.5438,"db":-41.197025},{"hz":160.0,"db":-41.60988},{"hz":179.59393,"db":-37.96515},{"hz":201.58737,"db":-41.878117},{"hz":226.27417,"db":-44.430107},{"hz":253.98416,"db":-46.042343},{"hz":285.0876,"db":-46.655975},{"hz":320.0,"db":-47.179413},{"hz":359.18787,"db":-48.63552},{"hz":403.17474,"db":-49.29196},{"hz":452.54834,"db":-47.63209},{"hz":507.96832,"db":-45.91545},{"hz":570.1752,"db":-45.89287},{"hz":640.0,"db":-43.489395},{"hz":718.37573,"db":-47.11055},{"hz":806.3495,"db":-48.13289},{"hz":905.0967,"db":-46.297882},{"hz":1015.93665,"db":-45.038853},{"hz":1140.3503,"db":-50.513763},{"hz":1280.0,"db":-48.447975},{"hz":1436.7515,"db":-51.031456},{"hz":1612.699,"db":-55.08436},{"hz":1810.1934,"db":-54.81269},{"hz":2031.8733,"db":-55.323357},{"hz":2280.7007,"db":-56.22045},{"hz":2560.0,"db":-58.214256},{"hz":2873.503,"db":-60.790234},{"hz":3225.398,"db":-61.077618},{"hz":3620.3867,"db":-61.036587},{"hz":4063.7466,"db":-62.88672},{"hz":4561.4014,"db":-63.103977},{"hz":5120.0,"db":-63.613884},{"hz":5747.006,"db":-63.0822},{"hz":6450.796,"db":-63.109905},{"hz":7240.7734,"db":-64.83444},{"hz":8127.493,"db":-66.84099},{"hz":9122.803,"db":-67.17915},{"hz":10240.0,"db":-67.28541},{"hz":11494.012,"db":-68.9085},{"hz":12901.592,"db":-72.29124},{"hz":14481.547,"db":-75.95553},{"hz":16254.986,"db":-78.67976},{"hz":18245.605,"db":-81.10174},{"hz":20480.0,"db":-89.28888},{"hz":22988.023,"db":-115.20423}],"issues":[{"id":"lra_flat","severity":"warn","title":"动态偏平（LRA 4.3 LU）","detail":"响度起伏小，音乐听起来容易僵硬、缺乏呼吸感"}]};
+
 export async function analyzeAudioQuality(filePath: string): Promise<QualityReport> {
   if (!isTauriRuntime()) {
-    return {
-      sample_rate: 44100,
-      channels: 2,
-      bit_depth: 16,
-      duration_sec: 240,
-      integrated_lufs: -9.5,
-      lra_lu: 6.2,
-      true_peak_dbtp: -0.8,
-      sample_peak_dbfs: -1.2,
-      cutoff_hz: null,
-      low_mid_excess_db: 0,
-      low_mid_center_hz: 0,
-      harsh_peaks: [],
-      stereo_correlation: 0.86,
-      side_mid_ratio_db: -11.5,
-      low_band_correlation: 0.94,
-      clipped_runs: 0,
-      dc_offset: [0, 0],
-      ltas: [],
-      issues: [
-        {
-          id: "mock",
-          severity: "ok",
-          title: "演示模式",
-          detail: "浏览器环境下返回占位报告",
-        },
-      ],
-    };
+    return MOCK_QUALITY_BEFORE;
   }
   return invoke<QualityReport>("analyze_audio_quality", { filePath });
 }
@@ -836,40 +814,27 @@ export async function restoreAudio(
   request: RestoreRequest,
 ): Promise<RestoreResult> {
   if (!isTauriRuntime()) {
-    const mockReport = (tag: string): QualityReport => ({
-      sample_rate: 48000,
-      channels: 2,
-      bit_depth: 24,
-      duration_sec: 240,
-      integrated_lufs: -14.0,
-      lra_lu: 7.0,
-      true_peak_dbtp: -1.0,
-      sample_peak_dbfs: -1.2,
-      cutoff_hz: null,
-      low_mid_excess_db: 0,
-      low_mid_center_hz: 0,
-      harsh_peaks: [],
-      stereo_correlation: 0.9,
-      side_mid_ratio_db: -10.0,
-      low_band_correlation: 0.95,
-      clipped_runs: 0,
-      dc_offset: [0, 0],
-      ltas: [],
-      issues: [{ id: "mock", severity: "ok", title: "演示模式", detail: tag }],
-    });
     return {
       output_path: "/tmp/mock_restored.wav",
       sample_rate: 48000,
       bit_depth: 24,
-      before: mockReport("修复前（演示数据）"),
-      after: mockReport("修复后（演示数据）"),
-      loudness_match_db: 0,
-      limiter_avg_gr_db: 0.8,
-      notes: ["浏览器演示模式，未实际处理"],
-      elapsed_ms: 1200,
+      before: MOCK_QUALITY_BEFORE,
+      after: MOCK_QUALITY_AFTER,
+      loudness_match_db:
+        MOCK_QUALITY_BEFORE.integrated_lufs - MOCK_QUALITY_AFTER.integrated_lufs,
+      limiter_avg_gr_db: 0.06,
+      notes: ["浏览器演示模式，展示真实诊断数据（东北的东）"],
+      elapsed_ms: 46400,
     };
   }
   return invoke<RestoreResult>("restore_audio", { request });
+}
+
+export function onRestoreProgress(
+  handler: (p: RestoreProgress) => void
+): Promise<UnlistenFn> {
+  if (!isTauriRuntime()) return Promise.resolve(() => {});
+  return listen<RestoreProgress>("restore-progress", (e) => handler(e.payload));
 }
 
 export async function exportRestoredWav(
