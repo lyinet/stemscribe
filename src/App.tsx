@@ -241,7 +241,10 @@ const THEME_LABEL_KEYS: Record<AppTheme, I18nKey> = {
 export const App: React.FC = () => {
   const lang = useLanguage();
 
-  useEffect(() => onLanguageChange((l) => void setMenuLanguage(l)), []);
+  useEffect(() => {
+    void setMenuLanguage(lang);
+    return onLanguageChange((l) => void setMenuLanguage(l));
+  }, []);
   const engineRef = useRef<MultiStemAudioEngine | null>(null);
   const midiBridgeRef = useRef<HardwareMidiBridge | null>(null);
   const tapTimesRef = useRef<number[]>([]);

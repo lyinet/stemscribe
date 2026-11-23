@@ -554,7 +554,7 @@ export const en = {
   "lyrics.addTip": "Insert a lyric line at the playhead",
   "lyrics.deleteTip": "Delete this line",
   "lyrics.earlierTip": "Shift all lyrics 0.5s earlier",
-  "lyrics.empty": "Click \"Import .lrc\" (or drag a .lrc file in), \"Add a line\" manually, or extract vocal lyrics with AI in the Restore tab.",
+  "lyrics.empty": "Click \"Import .lrc\" (or drag a .lrc file in), \"Add a line\" manually, or click \"AI extract\" above to transcribe vocal lyrics.",
   "lyrics.extract": "AI extract",
   "lyrics.import": "Import .lrc",
   "lyrics.importTip": "Import a local .lrc lyrics file (drag-in also works)",

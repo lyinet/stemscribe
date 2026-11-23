@@ -554,7 +554,7 @@ export const zh = {
   "lyrics.addTip": "在当前播放位置插入一句新歌词",
   "lyrics.deleteTip": "删除该句",
   "lyrics.earlierTip": "全部歌词提前 0.5 秒",
-  "lyrics.empty": "支持直接点击「导入 .lrc」（或从 Finder 拖入 `.lrc` 文件）、手动「加一句」打点，或在修复页签用 AI 提取人声歌词。",
+  "lyrics.empty": "支持直接点击「导入 .lrc」（或从 Finder 拖入 `.lrc` 文件）、手动「加一句」打点，或点击上方「AI 提取」识别人声歌词。",
   "lyrics.extract": "AI 提取",
   "lyrics.import": "导入 .lrc",
   "lyrics.importTip": "导入本地 .lrc 歌词文件（也支持直接拖入窗口）",

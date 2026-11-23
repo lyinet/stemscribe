@@ -14,8 +14,8 @@ const num = /([\d.]+)/;
 /** Translate a backend issue's title/detail by id; unknown ids pass through unchanged. */
 export function translateIssue(iss: BackendIssue): BackendIssue {
   if (iss.id === "hf_cutoff") {
-    const c = num.exec(iss.title)?.[1] ?? "";
-    const d = num.exec(iss.detail)?.[1] ?? "";
+    const c = iss.title.match(/([\d.]+)\s*kHz/)?.[1] ?? "";
+    const d = iss.detail.match(/参考电平\s*([+-]?[\d.]+)/)?.[1] ?? "";
     return { ...iss, title: t("be.hfCutoff.title", { cut: c }), detail: t("be.hfCutoff.detail", { refDb: d, cut: c }) };
   }
   if (iss.id === "low_mid_excess") {
@@ -30,7 +30,7 @@ export function translateIssue(iss: BackendIssue): BackendIssue {
     return { ...iss, title: t("be.mono.title"), detail: t("be.mono.detail") };
   }
   if (iss.id === "low_band_corr") {
-    const c = num.exec(iss.detail)?.[1] ?? "";
+    const c = iss.detail.match(/相关性\s*([\d.]+)/)?.[1] ?? "";
     return { ...iss, title: t("be.lowCorr.title"), detail: t("be.lowCorr.detail", { corr: c }) };
   }
   if (iss.id === "clipping") {
@@ -42,7 +42,7 @@ export function translateIssue(iss: BackendIssue): BackendIssue {
     return { ...iss, title: t("be.dcOffset.title"), detail: t("be.dcOffset.detail", { l: m?.[1] ?? "", r: m?.[2] ?? "" }) };
   }
   if (iss.id === "true_peak") {
-    const p = num.exec(iss.title)?.[1] ?? "";
+    const p = iss.title.match(/([+-]?[\d.]+)\s*dBTP/)?.[1] ?? "";
     return { ...iss, title: t("be.truePeak.title", { tp: p }), detail: t("be.truePeak.detail") };
   }
   if (iss.id === "lra_flat") {
