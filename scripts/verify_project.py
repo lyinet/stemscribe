@@ -6,6 +6,7 @@ StemScribe cross-layer verification & contract test suite.
 import json
 import py_compile
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -121,8 +122,12 @@ def check_icons() -> None:
 def check_scripts() -> None:
     for py in ["scripts/export_models_onnx.py", "scripts/generate_mac_icon.py", "scripts/verify_project.py"]:
         py_compile.compile(str(ROOT / py), doraise=True)
+    # Prefer Git Bash on Windows: a bare "bash" may resolve to WSL, which
+    # cannot see C:/ paths.
+    bash_candidates = [r"C:\Program Files\Git\bin\bash.exe", shutil.which("bash")]
+    bash = next((b for b in bash_candidates if b and Path(b).exists()), "bash")
     for sh in ["scripts/setup_mac.sh", "scripts/build_macos_dmg.sh"]:
-        subprocess.run(["bash", "-n", str(ROOT / sh)], check=True)
+        subprocess.run([bash, "-n", (ROOT / sh).as_posix()], check=True)
     assert (ROOT / ".github/workflows/macos-build.yml").exists(), "Missing GitHub Actions workflow"
     assert (ROOT / ".gitignore").exists(), "Missing .gitignore"
     print("[PASS] Helper scripts, .gitignore & GitHub Actions macOS workflow valid")

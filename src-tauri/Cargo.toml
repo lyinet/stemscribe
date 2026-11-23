@@ -26,7 +26,7 @@ thiserror = "2"
 dirs = "6"
 base64 = "0.22"
 
-ort = { version = "=2.0.0-rc.10", features = ["coreml", "ndarray"] }
+ort = { version = "=2.0.0-rc.10", features = ["ndarray"] }
 ndarray = "0.16"
 
 symphonia = { version = "0.5", features = ["all"] }
@@ -37,6 +37,10 @@ midir = "0.10"
 reqwest = { version = "0.12", features = ["json", "stream", "multipart", "rustls-tls"] }
 rubato = "=5.1.0"
 realfft = "=3.5.1"
+
+# CoreML execution provider is macOS-only; Windows/Linux use the CPU provider.
+[target.'cfg(target_os = "macos")'.dependencies]
+ort = { version = "=2.0.0-rc.10", features = ["coreml", "ndarray"] }
 
 [profile.release]
 panic = "unwind"

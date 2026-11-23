@@ -1,0 +1,2 @@
+# Shell scripts must stay LF so `bash -n` works on Windows checkouts (autocrlf).
+*.sh text eol=lf

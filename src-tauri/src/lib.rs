@@ -660,9 +660,12 @@ async fn refine_midi_with_llm(
 pub fn run() {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        if let Some(log_dir) =
+        let log_dir = if cfg!(target_os = "macos") {
             dirs::home_dir().map(|h| h.join("Library").join("Logs").join("StemScribe"))
-        {
+        } else {
+            dirs::data_local_dir().map(|h| h.join("StemScribe").join("logs"))
+        };
+        if let Some(log_dir) = log_dir {
             if std::fs::create_dir_all(&log_dir).is_ok() {
                 let ts = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
