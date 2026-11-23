@@ -352,14 +352,15 @@ export interface RestoreStemIn {
 }
 
 export interface RestoreModules {
-  vocal_cleanup: boolean;
-  shimmer: boolean;
-  drum_punch: boolean;
-  low_end: boolean;
-  width: boolean;
-  vocal_space: boolean;
-  hf_restore: boolean;
-  glue: boolean;
+  /** Per-module processing amounts 0–1.5 (0 = bypass; 1 = full). */
+  vocal_cleanup: number;
+  shimmer: number;
+  drum_punch: number;
+  low_end: number;
+  width: number;
+  vocal_space: number;
+  hf_restore: number;
+  glue: number;
   loudness: boolean;
   reference_match: boolean;
   drum_replace: boolean;
@@ -381,6 +382,46 @@ export interface RestoreSettings {
   follow_reference_loudness: boolean;
   /** 0.3 / 0.5 / 0.8 — reinforced-drum mix */
   drum_replace_amount: number;
+  /** −3..+3 dB gain on lead-vocal stems */
+  vocal_level_db: number;
+  /** −3..+3 dB peaking 3.5 kHz on lead vocals */
+  vocal_presence_db: number;
+  /** −3..+3 dB high-shelf 10 kHz on lead vocals */
+  vocal_air_db: number;
+  /** −3..+3 dB master low-shelf 100 Hz */
+  low_shelf_db: number;
+  /** −3..+3 dB master high-shelf 10 kHz */
+  high_shelf_db: number;
+}
+
+export interface AdvisorChange {
+  field: string;
+  label_zh: string;
+  from: number | boolean;
+  to: number | boolean;
+}
+
+export interface AdvisorLastResult {
+  report: QualityReport;
+  score: number;
+  terms?: unknown;
+}
+
+export interface AdvisorInput {
+  report: QualityReport;
+  stems: string[];
+  current: RestoreSettings;
+  last_result?: AdvisorLastResult | null;
+  user_request: string;
+}
+
+export interface AdvisorResult {
+  settings: RestoreSettings;
+  changes: AdvisorChange[];
+  explanation: string[];
+  confidence: "low" | "medium" | "high" | string;
+  warnings: string[];
+  raw: string;
 }
 
 export interface RestoreRequest {
@@ -478,14 +519,14 @@ export interface RestoreProgress {
 export const DEFAULT_RESTORE_SETTINGS: RestoreSettings = {
   strength: 1.0,
   modules: {
-    vocal_cleanup: true,
-    shimmer: true,
-    drum_punch: true,
-    low_end: true,
-    width: true,
-    vocal_space: true,
-    hf_restore: true,
-    glue: true,
+    vocal_cleanup: 1.0,
+    shimmer: 1.0,
+    drum_punch: 1.0,
+    low_end: 1.0,
+    width: 1.0,
+    vocal_space: 1.0,
+    hf_restore: 1.0,
+    glue: 1.0,
     loudness: true,
     reference_match: true,
     drum_replace: false,
@@ -497,6 +538,11 @@ export const DEFAULT_RESTORE_SETTINGS: RestoreSettings = {
   match_amount: 0.7,
   follow_reference_loudness: false,
   drum_replace_amount: 0.5,
+  vocal_level_db: 0,
+  vocal_presence_db: 0,
+  vocal_air_db: 0,
+  low_shelf_db: 0,
+  high_shelf_db: 0,
 };
 
 /** Persisted restoration render, stored inside a saved project. */

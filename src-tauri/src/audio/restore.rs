@@ -118,17 +118,45 @@ fn stem_role(st: &StemIn) -> StemRole {
     }
 }
 
+/// Deserialize a module amount (0–1.5) that also accepts the legacy
+/// boolean form: `true` → 1.0, `false` → 0.0 (older project files stored
+/// the modules as on/off switches).
+fn bool_or_amount<'de, D>(d: D) -> Result<f32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    match serde_json::Value::deserialize(d)? {
+        serde_json::Value::Bool(b) => Ok(if b { 1.0 } else { 0.0 }),
+        serde_json::Value::Number(n) => n
+            .as_f64()
+            .map(|v| v as f32)
+            .ok_or_else(|| Error::custom("invalid module amount")),
+        _ => Err(Error::custom("module amount must be a number or bool")),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RestoreModules {
-    pub vocal_cleanup: bool,
-    pub shimmer: bool,
-    pub drum_punch: bool,
-    pub low_end: bool,
-    pub width: bool,
-    pub vocal_space: bool,
-    pub hf_restore: bool,
-    pub glue: bool,
+    /// Per-module processing amount 0–1.5 (effective = strength × amount;
+    /// 0 = bypass). Legacy project files stored these as booleans.
+    #[serde(deserialize_with = "bool_or_amount")]
+    pub vocal_cleanup: f32,
+    #[serde(deserialize_with = "bool_or_amount")]
+    pub shimmer: f32,
+    #[serde(deserialize_with = "bool_or_amount")]
+    pub drum_punch: f32,
+    #[serde(deserialize_with = "bool_or_amount")]
+    pub low_end: f32,
+    #[serde(deserialize_with = "bool_or_amount")]
+    pub width: f32,
+    #[serde(deserialize_with = "bool_or_amount")]
+    pub vocal_space: f32,
+    #[serde(deserialize_with = "bool_or_amount")]
+    pub hf_restore: f32,
+    #[serde(deserialize_with = "bool_or_amount")]
+    pub glue: f32,
     pub loudness: bool,
     /// Reference-track spectral matching (active when reference_path set).
     pub reference_match: bool,
@@ -139,14 +167,14 @@ pub struct RestoreModules {
 impl Default for RestoreModules {
     fn default() -> Self {
         Self {
-            vocal_cleanup: true,
-            shimmer: true,
-            drum_punch: true,
-            low_end: true,
-            width: true,
-            vocal_space: true,
-            hf_restore: true,
-            glue: true,
+            vocal_cleanup: 1.0,
+            shimmer: 1.0,
+            drum_punch: 1.0,
+            low_end: 1.0,
+            width: 1.0,
+            vocal_space: 1.0,
+            hf_restore: 1.0,
+            glue: 1.0,
             loudness: true,
             reference_match: true,
             drum_replace: false,
@@ -172,6 +200,16 @@ pub struct RestoreSettings {
     pub follow_reference_loudness: bool,
     /// 0.3 / 0.5 / 0.8 — reinforced-drum mix (not scaled by strength).
     pub drum_replace_amount: f32,
+    /// −3..+3 dB gain on lead-vocal stems (inside the stem delta).
+    pub vocal_level_db: f32,
+    /// −3..+3 dB peaking 3.5 kHz Q 1.0 on lead-vocal stems.
+    pub vocal_presence_db: f32,
+    /// −3..+3 dB high-shelf 10 kHz Q 0.707 on lead-vocal stems.
+    pub vocal_air_db: f32,
+    /// −3..+3 dB master low-shelf 100 Hz (before glue).
+    pub low_shelf_db: f32,
+    /// −3..+3 dB master high-shelf 10 kHz (before glue).
+    pub high_shelf_db: f32,
 }
 
 impl Default for RestoreSettings {
@@ -186,7 +224,57 @@ impl Default for RestoreSettings {
             match_amount: 0.7,
             follow_reference_loudness: false,
             drum_replace_amount: 0.5,
+            vocal_level_db: 0.0,
+            vocal_presence_db: 0.0,
+            vocal_air_db: 0.0,
+            low_shelf_db: 0.0,
+            high_shelf_db: 0.0,
         }
+    }
+}
+
+impl RestoreSettings {
+    /// Clamp every adjustable field to the ranges the AI-advisor prompt
+    /// documents (strength 0.5–1.5, module amounts 0–1.5, tone dBs ±3,
+    /// target −16…−9 LUFS, drum amount snapped to 0.3/0.5/0.8).
+    pub fn clamped(&self) -> Self {
+        let mut c = self.clone();
+        c.strength = c.strength.clamp(0.5, 1.5);
+        let m = &mut c.modules;
+        for v in [
+            &mut m.vocal_cleanup,
+            &mut m.shimmer,
+            &mut m.drum_punch,
+            &mut m.low_end,
+            &mut m.width,
+            &mut m.vocal_space,
+            &mut m.hf_restore,
+            &mut m.glue,
+        ] {
+            *v = v.clamp(0.0, 1.5);
+        }
+        for v in [
+            &mut c.vocal_level_db,
+            &mut c.vocal_presence_db,
+            &mut c.vocal_air_db,
+            &mut c.low_shelf_db,
+            &mut c.high_shelf_db,
+        ] {
+            *v = v.clamp(-3.0, 3.0);
+        }
+        c.target_lufs = c.target_lufs.clamp(-16.0, -9.0);
+        let steps = [0.3f32, 0.5, 0.8];
+        c.drum_replace_amount = steps
+            .iter()
+            .copied()
+            .min_by(|a, b| {
+                (*a - c.drum_replace_amount)
+                    .abs()
+                    .partial_cmp(&(*b - c.drum_replace_amount).abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap_or(0.5);
+        c
     }
 }
 
@@ -309,6 +397,32 @@ fn peaking_stereo(l: &[f32], r: &[f32], sr: f64, freq: f64, q: f64, gain_db: f64
     (bl.process(l), br.process(r))
 }
 
+/// Vocal tone params applied to lead-vocal stems (inside the delta):
+/// 3.5 kHz presence peaking, 10 kHz air shelf, then overall level gain.
+/// All-0 is an exact bypass. Called on 44.1 kHz stem audio.
+fn apply_vocal_tone(l: &mut Vec<f32>, r: &mut Vec<f32>, rs: &RestoreSettings) {
+    if rs.vocal_presence_db.abs() > 1e-6 {
+        let (a, b) = peaking_stereo(l, r, STEM_SR, 3500.0, 1.0, rs.vocal_presence_db as f64);
+        *l = a;
+        *r = b;
+    }
+    if rs.vocal_air_db.abs() > 1e-6 {
+        let mut bl = Biquad::high_shelf(STEM_SR, 10_000.0, std::f64::consts::FRAC_1_SQRT_2, rs.vocal_air_db as f64);
+        let mut br = Biquad::high_shelf(STEM_SR, 10_000.0, std::f64::consts::FRAC_1_SQRT_2, rs.vocal_air_db as f64);
+        *l = bl.process(l);
+        *r = br.process(r);
+    }
+    if rs.vocal_level_db.abs() > 1e-6 {
+        let g = 10f64.powf(rs.vocal_level_db as f64 / 20.0) as f32;
+        for v in l.iter_mut() {
+            *v *= g;
+        }
+        for v in r.iter_mut() {
+            *v *= g;
+        }
+    }
+}
+
 // ---------- per-stem chains (at 44.1 kHz) ----------
 
 const STEM_SR: f64 = 44_100.0;
@@ -321,7 +435,8 @@ fn chain_vocals(
     dyn_scale: f64,
     lift: bool,
 ) -> (Vec<f32>, Vec<f32>) {
-    if s <= 0.0 || !m.vocal_cleanup {
+    let s = s * m.vocal_cleanup as f64;
+    if s <= 0.0 {
         return (l.to_vec(), r.to_vec());
     }
     let dyn_s = dyn_scale;
@@ -371,20 +486,21 @@ fn chain_drums(
     if s <= 0.0 {
         return (l, r);
     }
-    if m.drum_punch {
-        let mut t = TransientShaper::new(STEM_SR, 0.35 * s);
+    if m.drum_punch > 0.0 {
+        let mut t = TransientShaper::new(STEM_SR, 0.35 * s * m.drum_punch as f64);
         let (a, b) = t.process(&l, &r);
         l = a;
         r = b;
     }
-    if m.shimmer {
-        let mut a = SpectralSuppressor::new(STEM_SR, 7000.0, 16000.0, 3.0, 0.5 * s, 5.0 * s, 3.0, 40.0);
-        let mut b = SpectralSuppressor::new(STEM_SR, 7000.0, 16000.0, 3.0, 0.5 * s, 5.0 * s, 3.0, 40.0);
+    if m.shimmer > 0.0 {
+        let sh = s * m.shimmer as f64;
+        let mut a = SpectralSuppressor::new(STEM_SR, 7000.0, 16000.0, 3.0, 0.5 * sh, 5.0 * sh, 3.0, 40.0);
+        let mut b = SpectralSuppressor::new(STEM_SR, 7000.0, 16000.0, 3.0, 0.5 * sh, 5.0 * sh, 3.0, 40.0);
         l = a.process(&l);
         r = b.process(&r);
     }
-    if m.low_end && diag.low_mid_excess_db >= 2.0 && diag.low_mid_center_hz > 0.0 {
-        let cut = -0.5 * (diag.low_mid_excess_db.min(3.0) as f64) * s;
+    if m.low_end > 0.0 && diag.low_mid_excess_db >= 2.0 && diag.low_mid_center_hz > 0.0 {
+        let cut = -0.5 * (diag.low_mid_excess_db.min(3.0) as f64) * s * m.low_end as f64;
         let (a, b) = peaking_stereo(&l, &r, STEM_SR, diag.low_mid_center_hz as f64, 1.0, cut);
         l = a;
         r = b;
@@ -399,7 +515,8 @@ fn chain_bass(
     m: &RestoreModules,
     dyn_scale: f64,
 ) -> (Vec<f32>, Vec<f32>) {
-    if s <= 0.0 || !m.low_end {
+    let s = s * m.low_end as f64;
+    if s <= 0.0 {
         return (l.to_vec(), r.to_vec());
     }
     let (mut l, mut r) = mono_below(l, r, STEM_SR, 200.0);
@@ -435,26 +552,28 @@ fn chain_other(
     if s <= 0.0 {
         return (l, r);
     }
-    if m.low_end && diag.low_mid_excess_db >= 2.0 && diag.low_mid_center_hz > 0.0 {
-        let cut = -(diag.low_mid_excess_db.min(4.0) as f64) * s;
+    if m.low_end > 0.0 && diag.low_mid_excess_db >= 2.0 && diag.low_mid_center_hz > 0.0 {
+        let cut = -(diag.low_mid_excess_db.min(4.0) as f64) * s * m.low_end as f64;
         let (a, b) = peaking_stereo(&l, &r, STEM_SR, diag.low_mid_center_hz as f64, 0.9, cut);
         l = a;
         r = b;
     }
-    if m.vocal_cleanup {
-        let mut a = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 4.0, 0.5 * s, 5.0 * s, 5.0, 60.0);
-        let mut b = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 4.0, 0.5 * s, 5.0 * s, 5.0, 60.0);
+    if m.vocal_cleanup > 0.0 {
+        let vc = s * m.vocal_cleanup as f64;
+        let mut a = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 4.0, 0.5 * vc, 5.0 * vc, 5.0, 60.0);
+        let mut b = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 4.0, 0.5 * vc, 5.0 * vc, 5.0, 60.0);
         l = a.process(&l);
         r = b.process(&r);
     }
-    if m.shimmer {
-        let mut a = SpectralSuppressor::new(STEM_SR, 9000.0, 16000.0, 3.0, 0.4 * s, 4.0 * s, 3.0, 40.0);
-        let mut b = SpectralSuppressor::new(STEM_SR, 9000.0, 16000.0, 3.0, 0.4 * s, 4.0 * s, 3.0, 40.0);
+    if m.shimmer > 0.0 {
+        let sh = s * m.shimmer as f64;
+        let mut a = SpectralSuppressor::new(STEM_SR, 9000.0, 16000.0, 3.0, 0.4 * sh, 4.0 * sh, 3.0, 40.0);
+        let mut b = SpectralSuppressor::new(STEM_SR, 9000.0, 16000.0, 3.0, 0.4 * sh, 4.0 * sh, 3.0, 40.0);
         l = a.process(&l);
         r = b.process(&r);
     }
-    if m.width {
-        let mut w = 1.0 + 0.15 * s;
+    if m.width > 0.0 {
+        let mut w = 1.0 + 0.15 * s * m.width as f64;
         let (mut a, mut b) = widen_band(&l, &r, STEM_SR, 300.0, w);
         // Back off until L/R correlation of the widened output >= 0.2.
         let mut corr = correlate(&a, &b);
@@ -471,11 +590,9 @@ fn chain_other(
         l = a;
         r = b;
     }
-    if m.vocal_space {
+    if m.vocal_space > 0.0 {
         if vocals_weak || vocals.is_none() {
-            if m.vocal_space {
-                notes.push("人声过弱或缺失，已跳过人声空间避让".to_string());
-            }
+            notes.push("人声过弱或缺失，已跳过人声空间避让".to_string());
         } else if let Some((vl, vr)) = vocals {
             // sidechain = vocals band-passed 1-5 kHz (mono)
             let n = vl.len().min(vr.len());
@@ -488,7 +605,7 @@ fn chain_other(
                 })
                 .collect();
             let thr = detector_percentile(&sc, &sc, STEM_SR, (1000.0, 5000.0), 150.0, 0.50);
-            let mut de = DynamicEqBand::new(STEM_SR, 2500.0, 0.5, (1000.0, 5000.0), thr, 2.0, 2.0 * s, 10.0, 150.0);
+            let mut de = DynamicEqBand::new(STEM_SR, 2500.0, 0.5, (1000.0, 5000.0), thr, 2.0, 2.0 * s * m.vocal_space as f64, 10.0, 150.0);
             let (ol, or_) = de.process(&l, &r, Some(&sc));
             l = ol;
             r = or_;
@@ -506,23 +623,26 @@ fn master_bus(
     y_r: &[f32],
     work_sr: f64,
     s: f64,
-    m: &RestoreModules,
+    rs: &RestoreSettings,
     diag: &QualityReport,
     stem_mode: bool,
     dyn_scale: f64,
     ref_bands: Option<(&[BandLevel], &[BandLevel])>,
     ref_amount: f64,
 ) -> (Vec<f32>, Vec<f32>) {
+    let m = &rs.modules;
     let mut l = y_l.to_vec();
     let mut r = y_r.to_vec();
     if s <= 0.0 {
         return (l, r);
     }
-    let any_master = m.low_end
-        || m.glue
-        || m.hf_restore
+    let any_master = m.low_end > 0.0
+        || m.glue > 0.0
+        || m.hf_restore > 0.0
         || m.loudness
-        || m.vocal_cleanup
+        || m.vocal_cleanup > 0.0
+        || rs.low_shelf_db.abs() > 1e-6
+        || rs.high_shelf_db.abs() > 1e-6
         || ref_bands.is_some();
     if !any_master {
         return (l, r);
@@ -534,15 +654,15 @@ fn master_bus(
         l = hl.iter_mut().fold(l, |x, b| b.process(&x));
         r = hr.iter_mut().fold(r, |x, b| b.process(&x));
     }
-    if m.low_end && diag.low_mid_excess_db >= 2.0 && diag.low_mid_center_hz > 0.0 {
+    if m.low_end > 0.0 && diag.low_mid_excess_db >= 2.0 && diag.low_mid_center_hz > 0.0 {
         let k = if stem_mode { 0.5 } else { 1.0 };
-        let cut = -k * (diag.low_mid_excess_db.min(3.0) as f64) * s;
+        let cut = -k * (diag.low_mid_excess_db.min(3.0) as f64) * s * m.low_end as f64;
         let (a, b) = peaking_stereo(&l, &r, work_sr, diag.low_mid_center_hz as f64, 0.9, cut);
         l = a;
         r = b;
     }
     // Master-bus dynamic EQ per diagnosed harsh peak (<= 4).
-    if m.vocal_cleanup {
+    if m.vocal_cleanup > 0.0 {
         for pk in diag.harsh_peaks.iter().take(4) {
             let hz = pk.hz as f64;
             let lo = hz * 2f64.powf(-1.0 / 8.0);
@@ -555,7 +675,7 @@ fn master_bus(
                 (lo, hi),
                 thr,
                 3.0,
-                (pk.excess_db as f64).min(4.0) * s,
+                (pk.excess_db as f64).min(4.0) * s * m.vocal_cleanup as f64,
                 5.0,
                 80.0,
             );
@@ -579,10 +699,10 @@ fn master_bus(
         // A low-mid "excess" is usually several adjacent bumps; cutting only
         // the max band leaves the neighbours elevated. Cut every 200-500 Hz
         // band whose residual is >= 1.5 dB (still one correction pass).
-        if m.low_end {
+        if m.low_end > 0.0 {
             for (hz, resid) in super::quality::diagnose::low_mid_residuals(&ltas) {
                 if resid >= 1.5 {
-                    let cut = -0.7 * (resid.min(3.0) as f64) * s;
+                    let cut = -0.7 * (resid.min(3.0) as f64) * s * m.low_end as f64;
                     let (a, b) = peaking_stereo(&l, &r, work_sr, hz as f64, 0.9, cut);
                     l = a;
                     r = b;
@@ -590,7 +710,7 @@ fn master_bus(
                 }
             }
         }
-        if m.vocal_cleanup {
+        if m.vocal_cleanup > 0.0 {
             for pk in peaks.iter().take(4) {
                 if pk.excess_db >= 2.5 {
                     // The peak band also feeds the 1-octave reference mean,
@@ -602,7 +722,7 @@ fn master_bus(
                         work_sr,
                         pk.hz as f64,
                         4.0,
-                        -0.7 * pk.excess_db as f64 * s,
+                        -0.7 * pk.excess_db as f64 * s * m.vocal_cleanup as f64,
                     );
                     l = a;
                     r = b;
@@ -629,29 +749,45 @@ fn master_bus(
         l = a;
         r = b;
     }
-    if m.glue {
+    // User tone shelves: after residual corrections / reference match,
+    // before glue. dB values are applied as-is (not scaled by strength).
+    if rs.low_shelf_db.abs() > 1e-6 {
+        let mut bl = Biquad::low_shelf(work_sr, 100.0, std::f64::consts::FRAC_1_SQRT_2, rs.low_shelf_db as f64);
+        let mut br = Biquad::low_shelf(work_sr, 100.0, std::f64::consts::FRAC_1_SQRT_2, rs.low_shelf_db as f64);
+        l = bl.process(&l);
+        r = br.process(&r);
+    }
+    if rs.high_shelf_db.abs() > 1e-6 {
+        let mut bl = Biquad::high_shelf(work_sr, 10000.0, std::f64::consts::FRAC_1_SQRT_2, rs.high_shelf_db as f64);
+        let mut br = Biquad::high_shelf(work_sr, 10000.0, std::f64::consts::FRAC_1_SQRT_2, rs.high_shelf_db as f64);
+        l = bl.process(&l);
+        r = br.process(&r);
+    }
+    if m.glue > 0.0 {
         // Glue compressor: level-relative threshold = 3 s slow RMS envelope
         // + 2 dB — shapes micro-dynamics without flattening sections.
+        let gl = s * m.glue as f64;
         let (mut comp, mut env) =
-            Compressor::new_tracking(work_sr, 2.0, 1.5, 6.0, 20.0, 150.0, 2.0 * s * dyn_scale);
+            Compressor::new_tracking(work_sr, 2.0, 1.5, 6.0, 20.0, 150.0, 2.0 * gl * dyn_scale);
         let (ol, or_, _st) = comp.process(&mut env, &l, &r, None);
         l = ol;
         r = or_;
-        let mut sat = Saturator::new(1.5, (0.15 * s * dyn_scale).min(1.0));
+        let mut sat = Saturator::new(1.5, (0.15 * gl * dyn_scale).min(1.0));
         let (a, b) = sat.process_stereo(&l, &r);
         l = a;
         r = b;
     }
-    if m.low_end {
+    if m.low_end > 0.0 {
         let (a, b) = mono_below(&l, &r, work_sr, 120.0);
         l = a;
         r = b;
     }
-    if m.hf_restore {
+    if m.hf_restore > 0.0 {
         if let Some(cut) = diag.cutoff_hz {
             if cut < 19000.0 {
                 let fc = cut as f64;
-                let rel = if s <= 1.0 { -10.0 + 8.0 * (s - 0.5) } else { -6.0 + 6.0 * (s - 1.0) };
+                let hf = s * m.hf_restore as f64;
+                let rel = if hf <= 1.0 { -10.0 + 8.0 * (hf - 0.5) } else { -6.0 + 6.0 * (hf - 1.0) };
                 let n = l.len();
                 let add_l = exciter_band(&l, work_sr as u32, fc, rel);
                 let add_r = exciter_band(&r, work_sr as u32, fc, rel);
@@ -676,6 +812,12 @@ pub fn run_restore(
     mut emit: impl FnMut(&str, f32),
 ) -> Result<RestoreResult> {
     let t0 = Instant::now();
+    let mut owned;
+    let req = {
+        owned = req.clone();
+        owned.settings = owned.settings.clamped();
+        &owned
+    };
     let ctx = prepare_restore(req, &mut emit, false)?;
     let mut notes = ctx.notes.clone();
     let (y_l, y_r, limiter_avg_gr) =
@@ -839,6 +981,13 @@ fn render_stems(
     let work_rate = ctx.work_rate;
     let mut rnotes: Vec<String> = Vec::new();
     emit("stems", 5.0);
+    if !ctx.stem_mode
+        && (req.settings.vocal_level_db.abs() > 1e-6
+            || req.settings.vocal_presence_db.abs() > 1e-6
+            || req.settings.vocal_air_db.abs() > 1e-6)
+    {
+        rnotes.push("纯母带模式下人声相关参数不生效，已忽略".to_string());
+    }
     // --- Stem chains at 44.1k -> delta; sequential so peak memory stays
     // bounded (each stem decoded, processed, dropped in turn).
     let mut d44_l: Vec<f32> = Vec::new();
@@ -882,7 +1031,12 @@ fn render_stems(
                 .as_ref()
                 .map(|(a, b)| (a.as_slice(), b.as_slice()));
             let (pl, pr) = match role {
-                StemRole::Lead => chain_vocals(sl44, sr44, s, m, dyn_scale, true),
+                StemRole::Lead => {
+                    let (mut pl, mut pr) =
+                        chain_vocals(sl44, sr44, s, m, dyn_scale, true);
+                    apply_vocal_tone(&mut pl, &mut pr, &req.settings);
+                    (pl, pr)
+                }
                 StemRole::Backing => {
                     // Backing vocals: gentler vocal chain, no +1 dB lift.
                     chain_vocals(sl44, sr44, s * 0.6, m, dyn_scale, false)
@@ -985,7 +1139,7 @@ fn render_stems(
         &y_r,
         work_rate as f64,
         s,
-        m,
+        &req.settings,
         &ctx.before,
         ctx.stem_mode,
         dyn_scale,
@@ -1263,6 +1417,12 @@ pub fn run_restore_compare(
     mut emit: impl FnMut(&str, f32) + Send,
 ) -> Result<CompareResult> {
     let t0 = Instant::now();
+    let mut owned;
+    let req = {
+        owned = req.clone();
+        owned.settings = owned.settings.clamped();
+        &owned
+    };
     let ctx = prepare_restore(req, &mut emit, true)?;
     let critic_before = critic_score_opt(&req.source_path);
     let stem_name = Path::new(&req.source_path)
@@ -1473,14 +1633,14 @@ mod tests {
         write_test_wav(&src, 2.0, 44100);
         let mut settings = RestoreSettings::default();
         settings.modules = RestoreModules {
-            vocal_cleanup: false,
-            shimmer: false,
-            drum_punch: false,
-            low_end: false,
-            width: false,
-            vocal_space: false,
-            hf_restore: false,
-            glue: false,
+            vocal_cleanup: 0.0,
+            shimmer: 0.0,
+            drum_punch: 0.0,
+            low_end: 0.0,
+            width: 0.0,
+            vocal_space: 0.0,
+            hf_restore: 0.0,
+            glue: 0.0,
             loudness: false,
             ..Default::default()
         };
@@ -1809,14 +1969,14 @@ mod tests {
             settings: RestoreSettings {
                 strength: 1.0,
                 modules: RestoreModules {
-                    vocal_cleanup: false,
-                    shimmer: false,
-                    drum_punch: false,
-                    low_end: false,
-                    width: false,
-                    vocal_space,
-                    hf_restore: false,
-                    glue: false,
+                    vocal_cleanup: 0.0,
+                    shimmer: 0.0,
+                    drum_punch: 0.0,
+                    low_end: 0.0,
+                    width: 0.0,
+                    vocal_space: if vocal_space { 1.0 } else { 0.0 },
+                    hf_restore: 0.0,
+                    glue: 0.0,
                     loudness: false,
                     ..Default::default()
                 },
@@ -1949,14 +2109,14 @@ mod tests {
         let out = dir.join("bypass_out.wav");
         let mut settings = RestoreSettings::default();
         settings.modules = RestoreModules {
-            vocal_cleanup: false,
-            drum_punch: false,
-            low_end: false,
-            shimmer: false,
-            width: false,
-            vocal_space: false,
-            hf_restore: false,
-            glue: false,
+            vocal_cleanup: 0.0,
+            drum_punch: 0.0,
+            low_end: 0.0,
+            shimmer: 0.0,
+            width: 0.0,
+            vocal_space: 0.0,
+            hf_restore: 0.0,
+            glue: 0.0,
             loudness: false,
             drum_replace: false,
             reference_match: false,
@@ -1979,6 +2139,166 @@ mod tests {
         }
         let err_db = 10.0 * (num / den.max(1e-30)).log10();
         assert!(err_db <= -120.0, "bypass error {err_db:.1} dB must be <= -120 dB");
+    }
+
+    fn sine_gain_db(input: &[f32], output: &[f32]) -> f64 {
+        // RMS ratio over the steady-state second half (skips filter onset).
+        let n0 = input.len() / 2;
+        let rms = |v: &[f32]| -> f64 {
+            (v[n0..].iter().map(|x| (*x as f64).powi(2)).sum::<f64>()
+                / (v.len() - n0) as f64)
+                .sqrt()
+        };
+        20.0 * (rms(output) / rms(input).max(1e-30)).log10()
+    }
+
+    fn bare_diag() -> QualityReport {
+        QualityReport {
+            sample_rate: 44100,
+            channels: 2,
+            bit_depth: Some(32),
+            duration_sec: 1.0,
+            integrated_lufs: -20.0,
+            lra_lu: 5.0,
+            true_peak_dbtp: -3.0,
+            sample_peak_dbfs: -3.0,
+            cutoff_hz: None,
+            low_mid_excess_db: 0.0,
+            low_mid_center_hz: 0.0,
+            harsh_peaks: vec![],
+            stereo_correlation: 0.9,
+            side_mid_ratio_db: -10.0,
+            low_band_correlation: 0.9,
+            clipped_runs: 0,
+            dc_offset: [0.0, 0.0],
+            ltas: vec![],
+            issues: vec![],
+        }
+    }
+
+    fn all_off_settings() -> RestoreSettings {
+        let mut s = RestoreSettings::default();
+        s.modules = RestoreModules {
+            vocal_cleanup: 0.0,
+            shimmer: 0.0,
+            drum_punch: 0.0,
+            low_end: 0.0,
+            width: 0.0,
+            vocal_space: 0.0,
+            hf_restore: 0.0,
+            glue: 0.0,
+            loudness: false,
+            drum_replace: false,
+            reference_match: false,
+        };
+        s
+    }
+
+    #[test]
+    fn modules_deserialize_legacy_booleans() {
+        // Saved projects from before v0.14 stored module switches as bools.
+        let s: RestoreSettings = serde_json::from_str(
+            r#"{"modules":{"vocal_cleanup":true,"shimmer":false,"glue":true,"loudness":true}}"#,
+        )
+        .unwrap();
+        assert_eq!(s.modules.vocal_cleanup, 1.0);
+        assert_eq!(s.modules.shimmer, 0.0);
+        assert_eq!(s.modules.glue, 1.0);
+        assert!(s.modules.loudness);
+        // Missing fields fall back to defaults.
+        assert_eq!(s.modules.low_end, 1.0);
+        // Numeric amounts still work.
+        let s: RestoreSettings =
+            serde_json::from_str(r#"{"modules":{"vocal_cleanup":0.7}}"#).unwrap();
+        assert!((s.modules.vocal_cleanup - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn zero_module_amount_is_exact_bypass() {
+        let n = 44100;
+        let l: Vec<f32> = (0..n).map(|i| (i as f32 * 0.001).sin() * 0.3).collect();
+        let r: Vec<f32> = (0..n).map(|i| (i as f32 * 0.0013).cos() * 0.3).collect();
+        // vocal_cleanup = 0 -> chain_vocals is a sample-exact bypass.
+        let m = RestoreModules {
+            vocal_cleanup: 0.0,
+            ..Default::default()
+        };
+        let (pl, pr) = chain_vocals(&l, &r, 1.5, &m, 1.0, true);
+        assert_eq!(pl, l);
+        assert_eq!(pr, r);
+        // Everything 0 -> master_bus early-bypasses.
+        let rs = all_off_settings();
+        let (ml, mr) = master_bus(&l, &r, 44100.0, 1.5, &rs, &bare_diag(), true, 1.0, None, 0.0);
+        assert_eq!(ml, l);
+        assert_eq!(mr, r);
+    }
+
+    #[test]
+    fn vocal_presence_db_boosts_3k5() {
+        let n = 44100;
+        let w = 2.0 * std::f32::consts::PI * 3500.0 / 44100.0;
+        let in_l: Vec<f32> = (0..n).map(|i| (i as f32 * w).sin() * 0.3).collect();
+        let mut l = in_l.clone();
+        let mut r = in_l.clone();
+        let mut s = RestoreSettings::default();
+        s.vocal_presence_db = 3.0;
+        apply_vocal_tone(&mut l, &mut r, &s);
+        let g = sine_gain_db(&in_l, &l);
+        assert!((g - 3.0).abs() <= 0.3, "presence gain {g:.2} dB");
+    }
+
+    #[test]
+    fn master_high_shelf_boosts_15k() {
+        // Stage-level check before the limiter: +2 dB high shelf at 10 kHz
+        // measured on a 15 kHz sine through master_bus.
+        let n = 44100;
+        let w = 2.0 * std::f32::consts::PI * 15000.0 / 44100.0;
+        let l: Vec<f32> = (0..n).map(|i| (i as f32 * w).sin() * 0.3).collect();
+        let r = l.clone();
+        let mut rs = all_off_settings();
+        rs.high_shelf_db = 2.0;
+        let (ol, _or_) = master_bus(&l, &r, 44100.0, 1.0, &rs, &bare_diag(), true, 1.0, None, 0.0);
+        let g = sine_gain_db(&l, &ol);
+        assert!((g - 2.0).abs() <= 0.2, "high shelf gain {g:.2} dB");
+    }
+
+    #[test]
+    fn mix_only_ignores_vocal_tone_params() {
+        let dir = std::env::temp_dir().join(format!("stemscribe_tmix_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("mix_src.wav");
+        let out = dir.join("mix_out.wav");
+        write_test_wav(&src, 2.0, 44100);
+        let mut settings = all_off_settings();
+        settings.vocal_level_db = 3.0;
+        settings.vocal_presence_db = 3.0;
+        settings.vocal_air_db = 3.0;
+        let req = RestoreRequest {
+            source_path: src.to_string_lossy().to_string(),
+            stems: vec![],
+            settings,
+            output_path: Some(out.to_string_lossy().to_string()),
+        };
+        let res = run_restore(&req, |_, _| {}).unwrap();
+        assert!(
+            res.notes.iter().any(|n| n.contains("纯母带模式")),
+            "mix-only note missing: {:?}",
+            res.notes
+        );
+        // Vocal params ignored -> still a null render.
+        let d = decode_audio_file(&res.output_path).unwrap();
+        let (ol, or_) = d.to_stereo_planar();
+        let d0 = decode_audio_file(&src.to_string_lossy().to_string()).unwrap();
+        let (xl, xr) = d0.to_stereo_planar();
+        let n = ol.len().min(xl.len());
+        let mut e = 0.0f64;
+        let mut x_e = 0.0f64;
+        for i in 0..n {
+            e += ((ol[i] - xl[i]) as f64).powi(2) + ((or_[i] - xr[i]) as f64).powi(2);
+            x_e += (xl[i] as f64).powi(2) + (xr[i] as f64).powi(2);
+        }
+        let err_db = 10.0 * (e / x_e.max(1e-30)).log10();
+        assert!(err_db <= -120.0, "null error {err_db:.1} dB");
     }
 }
 

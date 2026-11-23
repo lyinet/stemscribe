@@ -1,3 +1,4 @@
+pub mod advisor;
 pub mod lyrics;
 
 use crate::audio::{decode_audio_file, resample::resample_hq};
@@ -154,7 +155,7 @@ pub async fn test_relay_connection(config: &LlmRelayConfig) -> Result<String> {
     }
 }
 
-async fn send_multimodal_request(
+pub(crate) async fn send_multimodal_request(
     config: &LlmRelayConfig,
     system_prompt: &str,
     user_text: &str,

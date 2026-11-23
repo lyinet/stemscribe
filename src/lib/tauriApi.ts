@@ -3,6 +3,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import type {
+  AdvisorInput,
+  AdvisorResult,
   ArrangementAnalysis,
   AudioMetadata,
   BatchJobOptions,
@@ -38,6 +40,7 @@ import type {
   RestoreProgress,
   RestoreRequest,
   RestoreResult,
+  RestoreSettings,
   CompareResult,
   ImportedStems,
   ImportStemSpec,
@@ -933,6 +936,46 @@ export async function restoreCompare(
     };
   }
   return invoke<CompareResult>("restore_compare", { request });
+}
+
+export async function adviseRestoration(
+  config: LlmRelayConfig,
+  input: AdvisorInput,
+): Promise<AdvisorResult> {
+  if (!isTauriRuntime()) {
+    const cur = input.current;
+    const merged: RestoreSettings = JSON.parse(JSON.stringify(cur));
+    merged.vocal_presence_db = Math.min(3, merged.vocal_presence_db + 1.5);
+    merged.modules = { ...merged.modules, glue: 0.8 };
+    merged.low_shelf_db = Math.max(-3, merged.low_shelf_db - 1);
+    return {
+      settings: merged,
+      changes: [
+        {
+          field: "vocal_presence_db",
+          label_zh: "人声清晰度",
+          from: cur.vocal_presence_db,
+          to: merged.vocal_presence_db,
+        },
+        { field: "glue", label_zh: "母带粘合", from: cur.modules.glue, to: 0.8 },
+        {
+          field: "low_shelf_db",
+          label_zh: "整体低频",
+          from: cur.low_shelf_db,
+          to: merged.low_shelf_db,
+        },
+      ],
+      explanation: [
+        "按你的要求「人声再亮一点」，人声 3.5 kHz 清晰度提高 1.5 dB；诊断里没有人声刺耳峰，提升是安全的",
+        "整体动态偏平，把母带粘合降到 0.8 减少过度压缩感",
+        "低频略有轰感，整体低频架 −1 dB",
+      ],
+      confidence: "medium",
+      warnings: ["浏览器演示模式：这是示例方案，不是真实 AI 返回"],
+      raw: "{}",
+    };
+  }
+  return invoke<AdvisorResult>("advise_restoration", { config, input });
 }
 
 export async function guessStemRoles(filePaths: string[]): Promise<string[]> {

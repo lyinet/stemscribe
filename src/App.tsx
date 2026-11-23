@@ -1559,12 +1559,20 @@ export const App: React.FC = () => {
     return useStems;
   };
 
-  const handleRestore = async () => {
+  const advisorPrevRef = useRef<{ result: RestoreResult; score: number } | null>(null);
+  const [advisorRegress, setAdvisorRegress] = useState<{
+    prevResult: RestoreResult;
+    prevScore: number;
+    newScore: number;
+  } | null>(null);
+
+  const handleRestore = async (settingsOverride?: RestoreSettings) => {
     if (!audioMeta || restoring) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
       setStatusMsg("演示曲不支持修复，请导入自己的歌曲。");
       return;
     }
+    const effSettings = settingsOverride ?? restoreSettings;
     setStudioTab("restore");
     setEditorOpen(true);
     try {
@@ -1584,11 +1592,18 @@ export const App: React.FC = () => {
             file_path: s.file_path,
             role: s.role ?? "",
           })),
-          settings: restoreSettings,
+          settings: effSettings,
           output_path: null,
         });
         setRestoreResult(res);
         setQualityBefore(res.before);
+        const prev = advisorPrevRef.current;
+        advisorPrevRef.current = null;
+        setAdvisorRegress(
+          prev && res.objective && res.objective.score > prev.score + 0.5
+            ? { prevResult: prev.result, prevScore: prev.score, newScore: res.objective.score }
+            : null,
+        );
         setStatusMsg(`修复完成：${res.output_path.split("/").pop()}`);
       } finally {
         unlisten();
@@ -1604,6 +1619,39 @@ export const App: React.FC = () => {
 
   const handleRestoreRef = useRef(handleRestore);
   handleRestoreRef.current = handleRestore;
+
+  /** Adopt an AI-advisor proposal: keep the current render for possible
+   *  rollback, apply the proposed settings and run the normal render. */
+  const handleApplyAdvisor = (s: RestoreSettings) => {
+    advisorPrevRef.current =
+      restoreResult?.objective != null
+        ? { result: restoreResult, score: restoreResult.objective.score }
+        : null;
+    setRestoreSettings(s);
+    void handleRestore(s);
+  };
+
+  const handleRevertAdvisor = () => {
+    if (advisorRegress) setRestoreResult(advisorRegress.prevResult);
+    setAdvisorRegress(null);
+  };
+
+  const advisorStemRoles = useMemo(
+    () =>
+      stems.map((s) => {
+        const r = s.role ?? "";
+        if (r === "lead") return "lead_vocals";
+        if (r === "backing") return "backing_vocals";
+        if (r === "perc") return "percussion";
+        if (r) return r;
+        const n = s.name.toLowerCase();
+        if (/vocal|vox/.test(n)) return "lead_vocals";
+        if (/drum/.test(n)) return "drums";
+        if (/bass/.test(n)) return "bass";
+        return "other";
+      }),
+    [stems]
+  );
 
   const candidateAsResult = useCallback(
     (cmp: CompareResult, i: number): RestoreResult => {
@@ -2107,7 +2155,7 @@ export const App: React.FC = () => {
               separating ||
               isDemoBlobPath(audioMeta?.file_path)
             }
-            onClick={handleRestore}
+            onClick={() => handleRestore()}
             title={
               audioMeta && isDemoBlobPath(audioMeta.file_path)
                 ? "演示曲不支持修复，请导入自己的歌曲"
@@ -2352,6 +2400,16 @@ export const App: React.FC = () => {
                   setIsPlaying(false);
                 }
               }}
+              llmConfig={relayConfig}
+              stemRoles={advisorStemRoles}
+              onApplyAdvisor={handleApplyAdvisor}
+              advisorRegress={
+                advisorRegress
+                  ? { prevScore: advisorRegress.prevScore, newScore: advisorRegress.newScore }
+                  : null
+              }
+              onRevertAdvisor={handleRevertAdvisor}
+              onOpenAiSettings={() => openSettings("ai")}
             />
           )}
 

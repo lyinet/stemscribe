@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, Pause, Play, Sparkles, X } from "lucide-react";
-import { pickAudioFile, resolveAudioUrl } from "../../lib/tauriApi";
+import { adviseRestoration, pickAudioFile, resolveAudioUrl } from "../../lib/tauriApi";
 import type {
+  AdvisorInput,
+  AdvisorResult,
   CompareResult,
+  LlmRelayConfig,
   QualityIssue,
   QualityReport,
   RestoreProgress,
@@ -27,6 +30,14 @@ interface Props {
   sourceDuration: number;
   mainIsPlaying: boolean;
   onAbPlayingChange: (playing: boolean) => void;
+  llmConfig: LlmRelayConfig | null;
+  /** Prompt-role names (lead_vocals/backing_vocals/drums/percussion/bass/other). */
+  stemRoles: string[];
+  onApplyAdvisor: (s: RestoreSettings) => void;
+  /** Set when the adopted AI render scored worse than the previous one. */
+  advisorRegress: { prevScore: number; newScore: number } | null;
+  onRevertAdvisor: () => void;
+  onOpenAiSettings: () => void;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -41,7 +52,26 @@ const STAGE_LABELS: Record<string, string> = {
   compare_strong: "对比 · 重档",
 };
 
-const MODULE_LABELS: Array<{ key: keyof RestoreSettings["modules"]; label: string }> = [
+type AmountModule =
+  | "vocal_cleanup"
+  | "shimmer"
+  | "drum_punch"
+  | "low_end"
+  | "width"
+  | "vocal_space"
+  | "hf_restore"
+  | "glue";
+
+type BoolModule = "loudness" | "reference_match" | "drum_replace";
+
+type ToneKey =
+  | "vocal_level_db"
+  | "vocal_presence_db"
+  | "vocal_air_db"
+  | "low_shelf_db"
+  | "high_shelf_db";
+
+const MODULE_LABELS: Array<{ key: AmountModule; label: string }> = [
   { key: "vocal_cleanup", label: "人声清理" },
   { key: "shimmer", label: "去金属声" },
   { key: "drum_punch", label: "鼓点冲击" },
@@ -50,8 +80,25 @@ const MODULE_LABELS: Array<{ key: keyof RestoreSettings["modules"]; label: strin
   { key: "vocal_space", label: "人声让位" },
   { key: "hf_restore", label: "补高频" },
   { key: "glue", label: "整体粘合" },
-  { key: "loudness", label: "响度标准化" },
 ];
+
+const TONE_FIELDS: Array<{ key: ToneKey; label: string }> = [
+  { key: "vocal_level_db", label: "人声音量" },
+  { key: "vocal_presence_db", label: "人声清晰度" },
+  { key: "vocal_air_db", label: "人声空气感" },
+  { key: "low_shelf_db", label: "整体低频" },
+  { key: "high_shelf_db", label: "整体高频" },
+];
+
+const CONF_LABELS: Record<string, string> = {
+  low: "置信度：低",
+  medium: "置信度：中",
+  high: "置信度：高",
+};
+
+function fmtAdvisorVal(v: number | boolean): string {
+  return typeof v === "boolean" ? (v ? "开" : "关") : `${v}`;
+}
 
 const SEV_ORDER: Record<string, number> = { ok: 0, warn: 1, bad: 2 };
 const SEV_COLOR: Record<string, string> = {
@@ -302,9 +349,55 @@ export const RestorePanel: React.FC<Props> = ({
   sourceDuration,
   mainIsPlaying,
   onAbPlayingChange,
+  llmConfig,
+  stemRoles,
+  onApplyAdvisor,
+  advisorRegress,
+  onRevertAdvisor,
+  onOpenAiSettings,
 }) => {
   const after = result?.after ?? null;
   const issues = useMemo(() => mergeIssues(before, after), [before, after]);
+
+  // ---------- AI 参谋 ----------
+  const [advisorText, setAdvisorText] = useState("");
+  const [advising, setAdvising] = useState(false);
+  const [proposal, setProposal] = useState<AdvisorResult | null>(null);
+  const [advisorError, setAdvisorError] = useState<string | null>(null);
+  const llmReady = !!(
+    llmConfig &&
+    llmConfig.base_url.trim() &&
+    llmConfig.api_key.trim()
+  );
+
+  const askAdvisor = async () => {
+    if (!llmConfig || !before || advising) return;
+    setAdvising(true);
+    setAdvisorError(null);
+    try {
+      const input: AdvisorInput = {
+        report: before,
+        stems: stemRoles,
+        current: settings,
+        last_result:
+          result?.objective != null
+            ? {
+                report: result.after,
+                score: result.objective.score,
+                terms: result.objective.terms,
+              }
+            : null,
+        user_request: advisorText,
+      };
+      const res = await adviseRestoration(llmConfig, input);
+      setProposal(res);
+    } catch (err) {
+      setAdvisorError(String(err));
+      setProposal(null);
+    } finally {
+      setAdvising(false);
+    }
+  };
 
   // ---------- A/B ----------
   const aRef = useRef<HTMLAudioElement>(null);
@@ -428,11 +521,18 @@ export const RestorePanel: React.FC<Props> = ({
 
   const setStrength = (v: number) => onSettingsChange({ ...settings, strength: v });
   const setTarget = (v: number) => onSettingsChange({ ...settings, target_lufs: v });
-  const toggleModule = (key: keyof RestoreSettings["modules"]) =>
+  const toggleModule = (key: BoolModule) =>
     onSettingsChange({
       ...settings,
       modules: { ...settings.modules, [key]: !settings.modules[key] },
     });
+  const setModuleAmount = (key: AmountModule, v: number) =>
+    onSettingsChange({
+      ...settings,
+      modules: { ...settings.modules, [key]: v },
+    });
+  const setTone = (key: ToneKey, v: number) =>
+    onSettingsChange({ ...settings, [key]: v });
 
   const metricRows: Array<{ label: string; before: string; after: string | null }> = before
     ? [
@@ -648,6 +748,104 @@ export const RestorePanel: React.FC<Props> = ({
               </div>
             </div>
           )}
+          <div className="rp-advisor">
+            <div className="rp-subtitle">AI 参谋</div>
+            <textarea
+              className="rp-advisor-text"
+              placeholder="想要什么效果？例如：人声再亮一点、低频别那么轰（可留空）"
+              value={advisorText}
+              disabled={running || advising}
+              onChange={(e) => setAdvisorText(e.target.value)}
+              rows={2}
+            />
+            <div className="rp-advisor-row">
+              <button
+                className="btn btn-sm"
+                disabled={running || advising || !llmReady || !before}
+                title={!before ? "先完成一次修复/诊断" : undefined}
+                onClick={askAdvisor}
+              >
+                {advising ? "AI 思考中…" : "让 AI 出方案"}
+              </button>
+              {!llmReady && (
+                <button className="rp-link" onClick={onOpenAiSettings}>
+                  先在设置里配置 AI 服务
+                </button>
+              )}
+              {llmReady && !before && (
+                <span className="rp-hint">先运行一次修复后可咨询</span>
+              )}
+            </div>
+            {advisorError && <div className="rp-advisor-err">{advisorError}</div>}
+            {proposal && (
+              <div className="rp-proposal">
+                <div className="rp-proposal-head">
+                  <span className="rp-proposal-title">AI 方案</span>
+                  <span className={`rp-badge conf-${proposal.confidence}`}>
+                    {CONF_LABELS[proposal.confidence] ?? proposal.confidence}
+                  </span>
+                </div>
+                {proposal.changes.length > 0 ? (
+                  <ul className="rp-proposal-changes">
+                    {proposal.changes.map((c) => (
+                      <li key={c.field}>
+                        <span className="rp-change-label">{c.label_zh}</span>
+                        <span className="rp-change-vals">
+                          {fmtAdvisorVal(c.from)} → {fmtAdvisorVal(c.to)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="rp-hint">AI 认为当前参数无需调整</div>
+                )}
+                {proposal.explanation.length > 0 && (
+                  <ul className="rp-proposal-expl">
+                    {proposal.explanation.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                )}
+                {proposal.warnings.length > 0 && (
+                  <ul className="rp-proposal-warn">
+                    {proposal.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="rp-proposal-actions">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={running}
+                    onClick={() => {
+                      onApplyAdvisor(proposal.settings);
+                      setProposal(null);
+                    }}
+                  >
+                    采用并修复
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    disabled={running}
+                    onClick={() => setProposal(null)}
+                  >
+                    放弃
+                  </button>
+                </div>
+              </div>
+            )}
+            {advisorRegress && (
+              <div className="rp-regress">
+                <span>
+                  AI 方案的规则评分比之前差（{advisorRegress.prevScore.toFixed(2)} →{" "}
+                  {advisorRegress.newScore.toFixed(2)}），建议放弃
+                </span>
+                <button className="btn btn-sm" onClick={onRevertAdvisor}>
+                  恢复之前的结果
+                </button>
+              </div>
+            )}
+          </div>
           {(running || progress) && (
             <div className="rp-progress">
               <div className="rp-progress-bar">
@@ -660,18 +858,55 @@ export const RestorePanel: React.FC<Props> = ({
           )}
           <details className="rp-adv">
             <summary>高级</summary>
-            <div className="rp-modules">
+            <div className="rp-sliders">
               {MODULE_LABELS.map((mm) => (
-                <label key={mm.key} className="rp-module">
+                <label key={mm.key} className="rp-slider">
+                  <span className="rp-slider-label">{mm.label}</span>
                   <input
-                    type="checkbox"
-                    checked={settings.modules[mm.key]}
+                    type="range"
+                    min={0}
+                    max={150}
+                    step={5}
                     disabled={running}
-                    onChange={() => toggleModule(mm.key)}
+                    value={Math.round(settings.modules[mm.key] * 100)}
+                    onChange={(e) =>
+                      setModuleAmount(mm.key, Number(e.target.value) / 100)
+                    }
                   />
-                  {mm.label}
+                  <span className="rp-slider-val">
+                    {Math.round(settings.modules[mm.key] * 100)}%
+                  </span>
                 </label>
               ))}
+              {TONE_FIELDS.map((t) => (
+                <label key={t.key} className="rp-slider">
+                  <span className="rp-slider-label">{t.label}</span>
+                  <input
+                    type="range"
+                    min={-3}
+                    max={3}
+                    step={0.5}
+                    disabled={running}
+                    value={settings[t.key]}
+                    onChange={(e) => setTone(t.key, Number(e.target.value))}
+                  />
+                  <span className="rp-slider-val">
+                    {settings[t.key] > 0 ? "+" : ""}
+                    {settings[t.key]} dB
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="rp-modules">
+              <label className="rp-module">
+                <input
+                  type="checkbox"
+                  checked={settings.modules.loudness}
+                  disabled={running}
+                  onChange={() => toggleModule("loudness")}
+                />
+                响度标准化
+              </label>
               <label className="rp-module">
                 <input
                   type="checkbox"

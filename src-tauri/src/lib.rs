@@ -15,6 +15,7 @@ use audio::structure::SongStructureSegment;
 use audio::takes::SavedTakeInfo;
 use audio::{AudioMetadata, StemMixInput};
 use batch::{BatchJobOptions, BatchJobSummary};
+use llm::advisor::{AdvisorInput, AdvisorResult};
 use llm::lyrics::LyricLine;
 use llm::{ArrangementAnalysis, LlmRelayConfig, RefinedScoreResponse};
 use ml::downloader::ModelItemInfo;
@@ -572,6 +573,16 @@ async fn test_llm_relay_connection(config: LlmRelayConfig) -> Result<String, Str
 }
 
 #[tauri::command]
+async fn advise_restoration(
+    config: LlmRelayConfig,
+    input: AdvisorInput,
+) -> Result<AdvisorResult, String> {
+    llm::advisor::advise_restoration(&config, &input)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn analyze_arrangement_with_llm(
     audio_path: String,
     bpm: Option<f32>,
@@ -720,7 +731,8 @@ pub fn run() {
             export_practice_bundle,
             test_llm_relay_connection,
             analyze_arrangement_with_llm,
-            refine_midi_with_llm
+            refine_midi_with_llm,
+            advise_restoration
         ])
         .run(tauri::generate_context!())
         .expect("error while running StemScribe");

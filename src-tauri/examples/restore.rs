@@ -279,15 +279,35 @@ fn main() {
     let req = RestoreRequest {
         source_path: input.clone(),
         stems,
-        settings: RestoreSettings {
-            strength,
-            reference_path: ref_path.clone(),
-            modules: stemscribe_lib::audio::restore::RestoreModules {
-                drum_replace: drums_amount.is_some(),
+        settings: {
+            let mut s = RestoreSettings {
+                strength,
+                reference_path: ref_path.clone(),
+                modules: stemscribe_lib::audio::restore::RestoreModules {
+                    drum_replace: drums_amount.is_some(),
+                    ..Default::default()
+                },
+                drum_replace_amount: drums_amount.unwrap_or(0.5),
                 ..Default::default()
-            },
-            drum_replace_amount: drums_amount.unwrap_or(0.5),
-            ..Default::default()
+            };
+            // --tone key=val (repeatable): vocal_level_db, vocal_presence_db,
+            // vocal_air_db, low_shelf_db, high_shelf_db
+            for (i, a) in args.iter().enumerate() {
+                if a == "--tone" {
+                    let kv = args.get(i + 1).expect("--tone needs key=val");
+                    let (k, v) = kv.split_once('=').expect("--tone needs key=val");
+                    let v: f32 = v.parse().expect("--tone val must be a number");
+                    match k {
+                        "vocal_level_db" => s.vocal_level_db = v,
+                        "vocal_presence_db" => s.vocal_presence_db = v,
+                        "vocal_air_db" => s.vocal_air_db = v,
+                        "low_shelf_db" => s.low_shelf_db = v,
+                        "high_shelf_db" => s.high_shelf_db = v,
+                        other => panic!("unknown tone param {other}"),
+                    }
+                }
+            }
+            s
         },
         output_path: Some(out_path),
     };
