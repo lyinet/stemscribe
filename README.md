@@ -158,7 +158,7 @@ Suno、MiniMax 这些 AI 生成的歌，旋律和编曲已经很好听，但一�
 
 ## 性能
 
-实测于 **Apple M4** 芯片的 Mac，StemScribe v0.10.0.0 正式构建：
+实测于 **Apple M4** 芯片的 Mac，StemScribe v0.10 正式构建：
 
 | 任务 | 输入 | 耗时 |
 | --- | --- | --- |
@@ -191,6 +191,7 @@ Suno、MiniMax 这些 AI 生成的歌，旋律和编曲已经很好听，但一�
 | --- | --- | --- | --- | --- |
 | HTDemucs（4 轨） | 人声 / 鼓 / 贝斯 / 伴奏分离 | 约 166 MB | [Meta Demucs](https://github.com/facebookresearch/demucs) · [ONNX 版](https://huggingface.co/StemSplitio/htdemucs-onnx) | MIT |
 | Basic Pitch | 音频转 MIDI | 约 230 KB | [Spotify Basic Pitch](https://github.com/spotify/basic-pitch) | Apache-2.0 |
+| HTDemucs-FT 人声专家（可选） | 高质量分轨：人声更干净，分轨时间约 2 倍 | 约 166 MB | [Meta Demucs](https://github.com/facebookresearch/demucs) · [ONNX 版](https://huggingface.co/StemSplitio/htdemucs-ft-onnx) | MIT |
 
 模型保存在 `~/Library/Application Support/StemScribe/models/`，下载一次后完全离线可用。网络受限时，可以用浏览器下载后在模型管理器里「从本地导入 .onnx」。
 
@@ -285,7 +286,7 @@ npm run build:mac      # 打包 .app 与 .dmg（Apple Silicon）
 - [x] **v0.10 一键修复 AI 歌曲音质**：音质诊断、分轨逐轨修复、母带、等响度 A/B 与盲听、24-bit 导出
 - [x] **v0.11 参考曲匹配**：选一首你喜欢的歌，把频响、响度、立体声宽度往它靠
 - [x] **v0.11 鼓替换（实验性）**：识别底鼓 / 军鼓，叠加真实鼓采样（CC0 授权）
-- [ ] **v0.12 AI 修复模型**：评估 Apollo / UniverSR 补高频、BS-RoFormer 更干净的分轨
+- [x] **v0.12 高质量分轨（可选）**：HTDemucs-FT 人声专家，人声更干净；评估 Apollo / UniverSR / BS-RoFormer 后暂不接入（适用性或许可证原因，见 v0.12 发布说明）
 - [x] 经典 DAW 界面：走带 / 多轨编排 / 底部编辑器 / 独立设置页
 - [x] 本地 HTDemucs 4 轨分离 + Basic Pitch 扒谱，模型一键下载与校验
 - [x] 和弦 / 调性 / BPM / 段落识别，和弦风格重配

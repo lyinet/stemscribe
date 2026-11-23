@@ -13,6 +13,7 @@ use std::path::PathBuf;
 pub struct ModelStatus {
     pub models_dir: String,
     pub demucs_installed: bool,
+    pub demucs_ft_vocals_installed: bool,
     pub basic_pitch_installed: bool,
     pub coreml_enabled: bool,
 }
@@ -28,6 +29,10 @@ pub fn demucs_model_path() -> Result<PathBuf> {
     Ok(models_dir()?.join("htdemucs.onnx"))
 }
 
+pub fn demucs_ft_vocals_model_path() -> Result<PathBuf> {
+    Ok(models_dir()?.join("htdemucs_ft_vocals.onnx"))
+}
+
 pub fn basic_pitch_model_path() -> Result<PathBuf> {
     Ok(models_dir()?.join("basic_pitch.onnx"))
 }
@@ -37,6 +42,7 @@ pub fn check_model_status() -> Result<ModelStatus> {
     Ok(ModelStatus {
         models_dir: dir.to_string_lossy().to_string(),
         demucs_installed: demucs_model_path()?.exists(),
+        demucs_ft_vocals_installed: demucs_ft_vocals_model_path()?.exists(),
         basic_pitch_installed: basic_pitch_model_path()?.exists(),
         coreml_enabled: cfg!(target_os = "macos"),
     })
@@ -54,6 +60,10 @@ fn build_session(model_path: &PathBuf, use_coreml: bool) -> Result<Session> {
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 8);
     let mut builder = Session::builder()?
         .with_optimization_level(GraphOptimizationLevel::Level3)?
+        // The pre-planned memory pattern reserves one arena sized to the
+        // model's worst-case concurrent tensors (~2.5 GB for HTDemucs);
+        // per-op arena allocation peaks much lower for chunked inference.
+        .with_memory_pattern(false)?
         .with_intra_threads(threads)?;
 
     #[cfg(target_os = "macos")]

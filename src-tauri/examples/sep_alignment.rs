@@ -63,7 +63,7 @@ fn main() {
 
     println!("running separation (this takes a while)...");
     let t0 = std::time::Instant::now();
-    let stems = run_separation(&path, out_dir).expect("separation failed");
+    let stems = run_separation(&path, out_dir, false).expect("separation failed");
     println!("separation done in {:.1}s", t0.elapsed().as_secs_f64());
 
     let n = x_l.len();

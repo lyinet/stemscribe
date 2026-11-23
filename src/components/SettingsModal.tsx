@@ -14,9 +14,11 @@ interface Props {
   themeLabels: Record<AppThemeId, string>;
   relayConfig: LlmRelayConfig;
   modelStatus: ModelStatus | null;
+  highQualitySep: boolean;
   midiDevices: MidiInputDeviceInfo[];
   onClose: () => void;
   onThemeChange: (theme: AppThemeId) => void;
+  onHighQualitySepChange: (v: boolean) => void;
   onRelayConfigChange: (next: LlmRelayConfig) => void;
   onTestRelay: () => Promise<string>;
   onOpenModelManager: () => void;
@@ -64,9 +66,11 @@ export const SettingsModal: React.FC<Props> = ({
   themeLabels,
   relayConfig,
   modelStatus,
+  highQualitySep,
   midiDevices,
   onClose,
   onThemeChange,
+  onHighQualitySepChange,
   onRelayConfigChange,
   onTestRelay,
   onOpenModelManager,
@@ -236,12 +240,29 @@ export const SettingsModal: React.FC<Props> = ({
                   </div>
                   <div className="status-item">
                     <HardDrive size={15} />
+                    <span>HTDemucs-FT 人声专家</span>
+                    <b className={modelStatus?.demucs_ft_vocals_installed ? "ok" : "warn"}>
+                      {modelStatus?.demucs_ft_vocals_installed ? "已安装" : "未安装"}
+                    </b>
+                  </div>
+                  <div className="status-item">
+                    <HardDrive size={15} />
                     <span>Basic Pitch 扒谱模型</span>
                     <b className={modelStatus?.basic_pitch_installed ? "ok" : "warn"}>
                       {modelStatus?.basic_pitch_installed ? "已安装" : "未安装"}
                     </b>
                   </div>
                 </div>
+                <Field label="高质量分轨">
+                  <label className="row" style={{ gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={highQualitySep}
+                      onChange={(e) => onHighQualitySepChange(e.target.checked)}
+                    />
+                    <span>高质量分轨（更慢，需要额外模型约 166 MB）</span>
+                  </label>
+                </Field>
                 <div className="set-hint">模型目录：{modelStatus?.models_dir ?? "—"}</div>
                 <button className="btn btn-primary" onClick={onOpenModelManager}>
                   <HardDrive size={14} /> 下载 / 导入模型...

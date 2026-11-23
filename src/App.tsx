@@ -328,6 +328,13 @@ export const App: React.FC = () => {
       return DEFAULT_RELAY;
     }
   });
+  const [highQualitySep, setHighQualitySep] = useState<boolean>(
+    () => localStorage.getItem("stemscribe_hq_sep") === "1"
+  );
+  const applyHighQualitySep = (v: boolean) => {
+    setHighQualitySep(v);
+    localStorage.setItem("stemscribe_hq_sep", v ? "1" : "0");
+  };
   const [analysis, setAnalysis] = useState<ArrangementAnalysis | null>(null);
   const [refineSummary, setRefineSummary] = useState("");
   const [fingeringTips, setFingeringTips] = useState<string[]>([]);
@@ -1437,11 +1444,18 @@ export const App: React.FC = () => {
     }
   };
 
-  const ensureModelInstalled = async (kind: "demucs" | "basic_pitch"): Promise<boolean> => {
+  const ensureModelInstalled = async (
+    kind: "demucs" | "basic_pitch" | "demucs_ft_vocals"
+  ): Promise<boolean> => {
     try {
       const status = await getModelStatus();
       setModelStatus(status);
-      const installed = kind === "demucs" ? status.demucs_installed : status.basic_pitch_installed;
+      const installed =
+        kind === "demucs"
+          ? status.demucs_installed
+          : kind === "demucs_ft_vocals"
+            ? status.demucs_ft_vocals_installed
+            : status.basic_pitch_installed;
       if (installed) return true;
     } catch {
       return true;
@@ -1449,7 +1463,9 @@ export const App: React.FC = () => {
     const message =
       kind === "demucs"
         ? "AI 分轨需要下载 HTDemucs 模型（约 166 MB，只需一次，之后完全离线运行）。现在打开模型管理器下载吗？"
-        : "扒谱需要下载 Basic Pitch 模型（约 230 KB）。现在下载吗？";
+        : kind === "demucs_ft_vocals"
+          ? "高质量分轨需要额外下载 HTDemucs-FT 人声专家模型（约 166 MB，只需一次）。现在打开模型管理器下载吗？"
+          : "扒谱需要下载 Basic Pitch 模型（约 230 KB）。现在下载吗？";
     const yes = await askConfirm(message, "需要下载 AI 模型");
     if (yes) {
       setShowModelModal(true);
@@ -1461,7 +1477,20 @@ export const App: React.FC = () => {
 
   const performSeparation = useCallback(
     async (filePath: string): Promise<StemOutput[]> => {
-      const res = await separateStems(filePath);
+      let quality: "standard" | "high" = highQualitySep ? "high" : "standard";
+      if (quality === "high" && !(await ensureModelInstalled("demucs_ft_vocals"))) {
+        quality = "standard";
+      }
+      let res: StemOutput[];
+      try {
+        res = await separateStems(filePath, quality);
+      } catch (err) {
+        // Model removed after the upfront check → offer the download prompt.
+        if (String(err).includes("htdemucs_ft_vocals")) {
+          await ensureModelInstalled("demucs_ft_vocals");
+        }
+        throw err;
+      }
       setStems(res);
       const initMixer: Record<string, StemMixerState> = {};
       for (const s of res) {
@@ -1474,7 +1503,7 @@ export const App: React.FC = () => {
       engineRef.current?.setReverb(reverbPreset, reverbWet);
       return res;
     },
-    [eq, reverbPreset, reverbWet]
+    [eq, reverbPreset, reverbWet, highQualitySep]
   );
 
   const handleSeparateStems = async () => {
@@ -1576,10 +1605,12 @@ export const App: React.FC = () => {
       return;
     }
     if (!(await ensureModelInstalled("demucs"))) return;
+    const sepQuality: "standard" | "high" =
+      highQualitySep && (await ensureModelInstalled("demucs_ft_vocals")) ? "high" : "standard";
     setAutoPipelining(true);
     try {
       setStatusMsg("一键扒带 1/4 · AI 分轨中…");
-      const resStems = await separateStems(audioMeta.file_path);
+      const resStems = await separateStems(audioMeta.file_path, sepQuality);
       setStems(resStems);
       const initMixer: Record<string, StemMixerState> = {};
       for (const s of resStems) {
@@ -2428,9 +2459,11 @@ export const App: React.FC = () => {
         themeLabels={THEME_LABELS}
         relayConfig={relayConfig}
         modelStatus={modelStatus}
+        highQualitySep={highQualitySep}
         midiDevices={midiDevices}
         onClose={() => setShowSettings(false)}
         onThemeChange={applyTheme}
+        onHighQualitySepChange={applyHighQualitySep}
         onRelayConfigChange={updateRelayConfig}
         onTestRelay={() => testLlmRelayConnection(relayConfig)}
         onOpenModelManager={() => setShowModelModal(true)}

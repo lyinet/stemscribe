@@ -55,7 +55,7 @@ fn main() {
             .collect();
     } else {
         std::fs::create_dir_all(&stems_dir).unwrap();
-        let outs = run_separation(&input, Some(stems_dir.to_string_lossy().to_string()))
+        let outs = run_separation(&input, Some(stems_dir.to_string_lossy().to_string()), false)
             .expect("separation failed");
         stems = outs
             .iter()

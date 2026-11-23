@@ -66,7 +66,7 @@ pub fn run_batch_queue(app: &AppHandle, opts: BatchJobOptions) -> Result<BatchJo
         };
 
         emit("separate", "running", "正在执行 CoreML 4 轨分离...");
-        match run_separation(file_path, Some(song_dir.to_string_lossy().to_string())) {
+        match run_separation(file_path, Some(song_dir.to_string_lossy().to_string()), false) {
             Ok(stems) => {
                 if opts.export_midi_for_vocals {
                     if let Some(vocal) = stems.iter().find(|s| s.name == "vocals") {

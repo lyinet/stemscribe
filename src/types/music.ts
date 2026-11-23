@@ -103,6 +103,7 @@ export interface LyricLine {
 export interface ModelStatus {
   models_dir: string;
   demucs_installed: boolean;
+  demucs_ft_vocals_installed: boolean;
   basic_pitch_installed: boolean;
   coreml_enabled: boolean;
 }

@@ -508,6 +508,7 @@ export async function getModelStatus(): Promise<ModelStatus> {
     return {
       models_dir: "~/Library/Application Support/StemScribe/models",
       demucs_installed: false,
+      demucs_ft_vocals_installed: false,
       basic_pitch_installed: false,
       coreml_enabled: true,
     };
@@ -542,6 +543,17 @@ export async function listOnnxModels(): Promise<ModelItemInfo[]> {
         installed: false,
         size_bytes: 0,
       },
+      {
+        id: "htdemucs_ft_vocals",
+        display_name: "HTDemucs-FT 人声专家（高质量分轨，可选）",
+        file_name: "htdemucs_ft_vocals.onnx",
+        default_url:
+          "https://huggingface.co/StemSplitio/htdemucs-ft-onnx/resolve/main/htdemucs_ft_vocals_fp16weights.onnx",
+        recommended_source_hint: "人声分离更干净，分轨时间约为标准的 2 倍。",
+        direct_download_ready: true,
+        installed: false,
+        size_bytes: 0,
+      },
     ];
   }
   return invoke<ModelItemInfo[]>("list_onnx_models");
@@ -571,7 +583,10 @@ export async function onModelDownloadProgress(
   return listen<DownloadProgressEvent>("model-download-progress", (e) => handler(e.payload));
 }
 
-export async function separateStems(filePath: string): Promise<StemOutput[]> {
+export async function separateStems(
+  filePath: string,
+  quality: "standard" | "high" = "standard"
+): Promise<StemOutput[]> {
   if (!isTauriRuntime()) {
     const names: Array<[string, string]> = [
       ["vocals", "人声"],
@@ -589,7 +604,7 @@ export async function separateStems(filePath: string): Promise<StemOutput[]> {
       ),
     }));
   }
-  return invoke<StemOutput[]>("separate_stems", { filePath, outputDir: null });
+  return invoke<StemOutput[]>("separate_stems", { filePath, outputDir: null, quality });
 }
 
 export async function transcribeStemToMidi(

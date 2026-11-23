@@ -323,8 +323,12 @@ async fn delete_onnx_model(model_id: String) -> Result<(), String> {
 async fn separate_stems(
     file_path: String,
     output_dir: Option<String>,
+    quality: Option<String>,
 ) -> Result<Vec<StemOutput>, String> {
-    tokio::task::spawn_blocking(move || ml::separator::run_separation(&file_path, output_dir))
+    let high_quality = matches!(quality.as_deref(), Some("high"));
+    tokio::task::spawn_blocking(move || {
+        ml::separator::run_separation(&file_path, output_dir, high_quality)
+    })
         .await
         .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
