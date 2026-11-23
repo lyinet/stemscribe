@@ -341,6 +341,8 @@ export interface RestoreModules {
   hf_restore: boolean;
   glue: boolean;
   loudness: boolean;
+  reference_match: boolean;
+  drum_replace: boolean;
 }
 
 export interface RestoreSettings {
@@ -351,6 +353,14 @@ export interface RestoreSettings {
   ceiling_dbtp: number;
   /** 24 or 16 */
   bit_depth: number;
+  /** Optional reference track for spectral matching */
+  reference_path?: string | null;
+  /** 0..1 blend of the reference correction (scaled by strength) */
+  match_amount: number;
+  /** Take loudness target from the reference instead of target_lufs */
+  follow_reference_loudness: boolean;
+  /** 0.3 / 0.5 / 0.8 — reinforced-drum mix */
+  drum_replace_amount: number;
 }
 
 export interface RestoreRequest {
@@ -358,6 +368,13 @@ export interface RestoreRequest {
   stems: RestoreStemIn[];
   settings: RestoreSettings;
   output_path?: string | null;
+}
+
+export interface ReferenceInfo {
+  path: string;
+  report: QualityReport;
+  distance_before_db: number;
+  distance_after_db: number;
 }
 
 export interface RestoreResult {
@@ -370,6 +387,7 @@ export interface RestoreResult {
   limiter_avg_gr_db: number;
   notes: string[];
   elapsed_ms: number;
+  reference?: ReferenceInfo | null;
 }
 
 export type RestoreStage =
@@ -397,10 +415,16 @@ export const DEFAULT_RESTORE_SETTINGS: RestoreSettings = {
     hf_restore: true,
     glue: true,
     loudness: true,
+    reference_match: true,
+    drum_replace: false,
   },
   target_lufs: -14.0,
   ceiling_dbtp: -1.0,
   bit_depth: 24,
+  reference_path: null,
+  match_amount: 0.7,
+  follow_reference_loudness: false,
+  drum_replace_amount: 0.5,
 };
 
 /** Persisted restoration render, stored inside a saved project. */

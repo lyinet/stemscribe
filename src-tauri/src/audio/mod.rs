@@ -1,5 +1,6 @@
 pub mod bpm;
 pub mod chords;
+pub mod drum_hits;
 pub mod drums;
 pub mod dsp;
 pub mod key;
@@ -7,6 +8,7 @@ pub mod midi_in;
 pub mod quality;
 pub mod reharmonize;
 pub mod resample;
+pub mod refmatch;
 pub mod restore;
 pub mod structure;
 pub mod takes;

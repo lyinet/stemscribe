@@ -2386,3 +2386,42 @@ input[type="range"]:not(.eq-fader):disabled::-webkit-slider-thumb {
   color: var(--amber);
   white-space: nowrap;
 }
+
+.rp-swatch.dashed {
+  background: none;
+  border-top: 2px dashed var(--accent);
+  height: 0;
+}
+
+.rp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 170px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--panel-2, rgba(127, 127, 127, 0.12));
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-chip-x {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.rp-chip-x:hover { color: var(--rose); }
+
+.rp-drumseg {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}

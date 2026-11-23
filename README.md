@@ -56,6 +56,8 @@ Suno、MiniMax 这些 AI 生成的歌，旋律和编曲已经很好听，但一�
 | 鼓 | 增强瞬态冲击力，压掉 7–16 kHz 的镲片金属声 |
 | 贝斯 | 200 Hz 以下收成单声道，加谐波让小音箱也听得见 |
 | 伴奏 | 挖掉浑浊的低中频、适度加宽，人声出现时在 2.5 kHz 让位 |
+| 参考曲匹配（可选） | 选一首喜欢的歌，频响和立体声宽度往它靠（线性相位，最多 ±6 dB），可跟随它的响度 |
+| 鼓替换（实验性） | 识别底鼓、军鼓，按原力度叠加真实原声鼓采样 |
 | 母带 | 诊断出的刺耳峰定点压制并复查、粘合压缩、低频单声道、补出截止频率以上的高频、真峰值限制到 −14 LUFS / −1 dBTP |
 
 实测（Apple M4，标准档）：
@@ -281,8 +283,8 @@ npm run build:mac      # 打包 .app 与 .dmg（Apple Silicon）
 ## 路线图
 
 - [x] **v0.10 一键修复 AI 歌曲音质**：音质诊断、分轨逐轨修复、母带、等响度 A/B 与盲听、24-bit 导出
-- [ ] **v0.11 参考曲匹配**：选一首你喜欢的歌，把频响、响度、立体声宽度往它靠
-- [ ] **v0.11 鼓替换**：用识别出的鼓点触发真实鼓采样（CC0 授权）
+- [x] **v0.11 参考曲匹配**：选一首你喜欢的歌，把频响、响度、立体声宽度往它靠
+- [x] **v0.11 鼓替换（实验性）**：识别底鼓 / 军鼓，叠加真实鼓采样（CC0 授权）
 - [ ] **v0.12 AI 修复模型**：评估 Apollo / UniverSR 补高频、BS-RoFormer 更干净的分轨
 - [x] 经典 DAW 界面：走带 / 多轨编排 / 底部编辑器 / 独立设置页
 - [x] 本地 HTDemucs 4 轨分离 + Basic Pitch 扒谱，模型一键下载与校验
@@ -336,6 +338,8 @@ StemScribe 站在这些优秀开源项目的肩膀上：
 [Symphonia](https://github.com/pdeljanov/Symphonia) ·
 [VexFlow](https://github.com/0xfe/vexflow) ·
 [Lucide](https://github.com/lucide-icons/lucide)
+
+鼓替换采样来自 [Big Rusty Drums](https://github.com/sfzinstruments/karoryfer.big-rusty-drums)（Karoryfer Samples, [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/)）。
 
 ## License
 

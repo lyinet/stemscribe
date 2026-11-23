@@ -814,6 +814,10 @@ export async function restoreAudio(
   request: RestoreRequest,
 ): Promise<RestoreResult> {
   if (!isTauriRuntime()) {
+    const notes = ["浏览器演示模式，展示真实诊断数据（东北的东）"];
+    if (request.settings.modules?.drum_replace) {
+      notes.push("叠加真实鼓：底鼓 120/190、军鼓 260/608");
+    }
     return {
       output_path: "/tmp/mock_restored.wav",
       sample_rate: 48000,
@@ -823,8 +827,16 @@ export async function restoreAudio(
       loudness_match_db:
         MOCK_QUALITY_BEFORE.integrated_lufs - MOCK_QUALITY_AFTER.integrated_lufs,
       limiter_avg_gr_db: 0.06,
-      notes: ["浏览器演示模式，展示真实诊断数据（东北的东）"],
+      notes,
       elapsed_ms: 46400,
+      reference: request.settings.reference_path
+        ? {
+            path: request.settings.reference_path,
+            report: MOCK_QUALITY_AFTER,
+            distance_before_db: 4.41,
+            distance_after_db: 1.12,
+          }
+        : null,
     };
   }
   return invoke<RestoreResult>("restore_audio", { request });

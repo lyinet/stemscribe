@@ -10,6 +10,8 @@ use super::dsp::saturation::Saturator;
 use super::dsp::spectral::SpectralSuppressor;
 use super::dsp::stereo::{mono_below, widen_band};
 use super::dsp::transient::TransientShaper;
+use super::drum_hits;
+use super::quality::spectrum::BandLevel;
 use super::quality::{analyze_quality, loudness, QualityReport};
 use super::resample::resample_hq_stereo;
 use super::{decode_audio_file, write_stereo_wav_i24};
@@ -36,6 +38,10 @@ pub struct RestoreModules {
     pub hf_restore: bool,
     pub glue: bool,
     pub loudness: bool,
+    /// Reference-track spectral matching (active when reference_path set).
+    pub reference_match: bool,
+    /// Acoustic drum reinforcement on the drums stem.
+    pub drum_replace: bool,
 }
 
 impl Default for RestoreModules {
@@ -50,6 +56,8 @@ impl Default for RestoreModules {
             hf_restore: true,
             glue: true,
             loudness: true,
+            reference_match: true,
+            drum_replace: false,
         }
     }
 }
@@ -64,6 +72,14 @@ pub struct RestoreSettings {
     pub ceiling_dbtp: f64,
     /// 24 or 16.
     pub bit_depth: u16,
+    /// Optional reference track for spectral matching.
+    pub reference_path: Option<String>,
+    /// 0..1 blend of the reference correction (scaled by strength).
+    pub match_amount: f32,
+    /// Take the loudness target from the reference instead of target_lufs.
+    pub follow_reference_loudness: bool,
+    /// 0.3 / 0.5 / 0.8 — reinforced-drum mix (not scaled by strength).
+    pub drum_replace_amount: f32,
 }
 
 impl Default for RestoreSettings {
@@ -74,6 +90,10 @@ impl Default for RestoreSettings {
             target_lufs: -14.0,
             ceiling_dbtp: -1.0,
             bit_depth: 24,
+            reference_path: None,
+            match_amount: 0.7,
+            follow_reference_loudness: false,
+            drum_replace_amount: 0.5,
         }
     }
 }
@@ -89,6 +109,19 @@ pub struct RestoreRequest {
     pub output_path: Option<String>,
 }
 
+/// Reference-match summary attached to RestoreResult when a reference
+/// track was used.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReferenceInfo {
+    pub path: String,
+    /// Full quality report of the reference (ltas = mid bands).
+    pub report: QualityReport,
+    /// Normalized-LTAS RMS distance 60 Hz-12 kHz: source vs reference.
+    pub distance_before_db: f64,
+    /// Same metric for the rendered output.
+    pub distance_after_db: f64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RestoreResult {
     pub output_path: String,
@@ -100,6 +133,8 @@ pub struct RestoreResult {
     pub limiter_avg_gr_db: f64,
     pub notes: Vec<String>,
     pub elapsed_ms: u64,
+    #[serde(default)]
+    pub reference: Option<ReferenceInfo>,
 }
 
 // ---------- helpers ----------
@@ -362,6 +397,7 @@ fn chain_other(
 // ---------- master bus ----------
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn master_bus(
     y_l: &[f32],
     y_r: &[f32],
@@ -371,13 +407,20 @@ fn master_bus(
     diag: &QualityReport,
     stem_mode: bool,
     dyn_scale: f64,
+    ref_bands: Option<(&[BandLevel], &[BandLevel])>,
+    ref_amount: f64,
 ) -> (Vec<f32>, Vec<f32>) {
     let mut l = y_l.to_vec();
     let mut r = y_r.to_vec();
     if s <= 0.0 {
         return (l, r);
     }
-    let any_master = m.low_end || m.glue || m.hf_restore || m.loudness || m.vocal_cleanup;
+    let any_master = m.low_end
+        || m.glue
+        || m.hf_restore
+        || m.loudness
+        || m.vocal_cleanup
+        || ref_bands.is_some();
     if !any_master {
         return (l, r);
     }
@@ -468,6 +511,21 @@ fn master_bus(
             break;
         }
     }
+    // Reference spectral matching: linear-phase FIR on M and S, between
+    // the residual EQ corrections and the glue stage.
+    if let Some((rm, rs)) = ref_bands {
+        let (a, b) = super::refmatch::match_apply(
+            &l,
+            &r,
+            work_sr,
+            rm,
+            rs,
+            ref_amount,
+            diag.cutoff_hz.map(|c| c as f64),
+        );
+        l = a;
+        r = b;
+    }
     if m.glue {
         // Glue compressor: level-relative threshold = 3 s slow RMS envelope
         // + 2 dB — shapes micro-dynamics without flattening sections.
@@ -528,12 +586,39 @@ pub fn run_restore(
     } else {
         48_000
     };
+
     let (xw_l, xw_r) = resample_hq_stereo(&xl, &xr, decoded.sample_rate, work_rate);
     let n = xw_l.len().min(xw_r.len());
     let stem_mode = !req.stems.is_empty();
     if decoded.channels == 1 {
         notes.push("源文件为单声道，已复制为立体声处理".to_string());
     }
+    drop(decoded);
+    drop(xl);
+    drop(xr);
+
+    // Reference track (optional): decode at full quality -> work rate ->
+    // mid+side LTAS + integrated loudness.
+    let ref_ctx: Option<(QualityReport, Vec<BandLevel>, Vec<BandLevel>, f64)> =
+        if (m.reference_match || req.settings.follow_reference_loudness)
+            && req.settings.reference_path.as_deref().is_some_and(|p| !p.is_empty())
+        {
+            let p = req.settings.reference_path.as_deref().unwrap();
+            let rep =
+                analyze_quality(p).map_err(|e| anyhow!("参考曲分析失败: {e}"))?;
+            let d = decode_audio_file(p).map_err(|e| anyhow!("参考曲读取失败: {e}"))?;
+            let d_sr = d.sample_rate;
+            let (rl, rr) = d.to_stereo_planar();
+            drop(d);
+            let (rlw, rrw) = resample_hq_stereo(&rl, &rr, d_sr, work_rate);
+            drop(rl);
+            drop(rr);
+            let (rm, rs) = super::quality::spectrum::ms_ltas(&rlw, &rrw, work_rate);
+            let ri = loudness::integrated_lufs(&[rlw, rrw], work_rate);
+            Some((rep, rm, rs, ri))
+        } else {
+            None
+        };
     emit("stems", 5.0);
 
     // Stem RMS pass (weak-vocal detection) — decode once, keep only scalars
@@ -560,6 +645,19 @@ pub fn run_restore(
     if !stem_mode {
         notes.push("未提供分轨，执行纯母带处理模式".to_string());
     }
+
+    // Bundled drum kit (loaded once when reinforcement is on).
+    let drum_kit = if m.drum_replace && stem_mode {
+        match drum_hits::DrumKit::load(&drum_hits::kit_dir(), 44_100) {
+            Ok(k) => Some(k),
+            Err(e) => {
+                notes.push(format!("鼓件加载失败，已跳过鼓替换: {e}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     // One full render (stems -> delta remix -> master -> loudness/limiter).
     // Returns (out_l, out_r, limiter_avg_gr, render notes). The LRA guard
@@ -600,7 +698,55 @@ pub fn run_restore(
                 let (pl, pr) = if is_vocal {
                     chain_vocals(&sl44, &sr44, s, m, dyn_scale)
                 } else if is_drum {
-                    chain_drums(&sl44, &sr44, s, m, &before)
+                    let (mut pl, mut pr) = chain_drums(&sl44, &sr44, s, m, &before);
+                    // Drum reinforcement: add real-kit hits on top of the
+                    // processed stem (part of the delta). Not scaled by
+                    // the global strength.
+                    if m.drum_replace {
+                        if let Some(kit) = drum_kit.as_ref() {
+                            let hits =
+                                drum_hits::detect_hits(&sl44, &sr44, 44_100.0);
+                            let g = drum_hits::gate_hits(
+                                &hits, &sl44, &sr44, 44_100.0,
+                            );
+                            if g.disabled {
+                                rnotes.push(
+                                    "鼓点不够规整，已跳过鼓替换".to_string()
+                                );
+                            } else {
+                                let mut hits = g.hits;
+                                drum_hits::assign_polarity(
+                                    &mut hits, kit, &sl44, &sr44, 44_100.0,
+                                );
+                                let (mut nk, mut ns) = (0usize, 0usize);
+                                for h in &hits {
+                                    match h.class {
+                                        drum_hits::DrumClass::Kick => nk += 1,
+                                        drum_hits::DrumClass::Snare => ns += 1,
+                                        drum_hits::DrumClass::Hihat => {}
+                                    }
+                                }
+                                let rbuf = drum_hits::render_reinforcement(
+                                    &hits, kit, &sl44, &sr44, 44_100.0,
+                                );
+                                let amount = req.settings.drum_replace_amount as f32;
+                                let len = pl.len().min(rbuf.len());
+                                for i in 0..len {
+                                    pl[i] += amount * rbuf[i];
+                                    pr[i] += amount * rbuf[i];
+                                }
+                                rnotes.push(format!(
+                                    "叠加真实鼓：底鼓 {nk}/{}、军鼓 {ns}/{}",
+                                    g.raw[0], g.raw[1]
+                                ));
+                            }
+                        } else {
+                            rnotes.push(
+                                "鼓替换已开启但鼓件加载失败，已跳过".to_string()
+                            );
+                        }
+                    }
+                    (pl, pr)
                 } else if is_bass {
                     chain_bass(&sl44, &sr44, s, m, dyn_scale)
                 } else {
@@ -641,12 +787,35 @@ pub fn run_restore(
         emit("master", 50.0);
 
         // `yb` = master-bus output, pre-limiter.
-        let (yb_l, yb_r) =
-            master_bus(&y_l, &y_r, work_rate as f64, s, m, &before, stem_mode, dyn_scale);
+        let (yb_l, yb_r) = master_bus(
+            &y_l,
+            &y_r,
+            work_rate as f64,
+            s,
+            m,
+            &before,
+            stem_mode,
+            dyn_scale,
+            if m.reference_match {
+                ref_ctx.as_ref().map(|(_, rm, rs, _)| (rm.as_slice(), rs.as_slice()))
+            } else {
+                None
+            },
+            (req.settings.match_amount as f64 * s).min(1.0),
+        );
         drop((y_l, y_r));
 
         // --- Loudness matching + limiter ---
         emit("limit", 75.0);
+        // follow_reference_loudness overrides the user target.
+        let target_lufs = if req.settings.follow_reference_loudness {
+            ref_ctx
+                .as_ref()
+                .map(|(_, _, _, ri)| ri.clamp(-16.0, -9.0))
+                .unwrap_or(req.settings.target_lufs)
+        } else {
+            req.settings.target_lufs
+        };
         let limit_once = |gain_db: f64,
                           l: &[f32],
                           r: &[f32]|
@@ -662,7 +831,7 @@ pub fn run_restore(
         if m.loudness {
         let i_pre = loudness::integrated_lufs(&[yb_l.clone(), yb_r.clone()], work_rate);
         let mut pre_gain_db = if i_pre.is_finite() {
-            (req.settings.target_lufs - i_pre).min(12.0)
+            (target_lufs - i_pre).min(12.0)
         } else {
             0.0
         };
@@ -675,10 +844,10 @@ pub fn run_restore(
             ol = a;
             or_ = b;
             last_gr = st.avg_gr_db;
-            if !i_post.is_finite() || (req.settings.target_lufs - i_post).abs() <= 0.2 {
+            if !i_post.is_finite() || (target_lufs - i_post).abs() <= 0.2 {
                 break;
             }
-            pre_gain_db = (pre_gain_db + req.settings.target_lufs - i_post).min(12.0);
+            pre_gain_db = (pre_gain_db + target_lufs - i_post).min(12.0);
         }
         // If reaching target costs > 3 dB average GR, stop at the loudness
         // achievable with ~3 dB and note it. GR is not linear in pre-gain,
@@ -789,6 +958,18 @@ pub fn run_restore(
     // De-duplicate notes (per-stem chains can emit the same message).
     let mut seen = std::collections::HashSet::new();
     notes.retain(|n| seen.insert(n.clone()));
+    // Reference spectral distance: source-vs-ref and output-vs-ref on the
+    // normalized mid LTAS, 1/3-oct bands 60 Hz-12 kHz.
+    let reference = ref_ctx.map(|(rep, rm, _rs, _ri)| {
+        let d_before = super::refmatch::spectral_distance(&before.ltas, &rm);
+        let d_after = super::refmatch::spectral_distance(&after.ltas, &rm);
+        ReferenceInfo {
+            path: req.settings.reference_path.clone().unwrap_or_default(),
+            report: rep,
+            distance_before_db: d_before,
+            distance_after_db: d_after,
+        }
+    });
     Ok(RestoreResult {
         output_path: out_path,
         sample_rate: work_rate,
@@ -799,6 +980,7 @@ pub fn run_restore(
         limiter_avg_gr_db: limiter_avg_gr,
         notes,
         elapsed_ms: t0.elapsed().as_millis() as u64,
+        reference,
     })
 }
 
@@ -879,6 +1061,7 @@ mod tests {
             hf_restore: false,
             glue: false,
             loudness: false,
+            ..Default::default()
         };
         let req = RestoreRequest {
             source_path: src.to_string_lossy().to_string(),
@@ -1006,6 +1189,143 @@ mod tests {
         assert_eq!(xcorr_lag(&r, &or_, c, 48000), 0, "restore lag R");
     }
 
+    #[test]
+    fn restore_with_reference_has_zero_lag() {
+        // Reference matching enabled: output stays sample-aligned and the
+        // spectral distance to the reference shrinks.
+        let dir = std::env::temp_dir().join("stemscribe_restore_reflag");
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("reflag_src.wav");
+        let refp = dir.join("reflag_ref.wav");
+        let out = dir.join("reflag_out.wav");
+        let sr = 48000u32;
+        let n = sr as usize * 4;
+        let mut seed = 0xABCDEFu64;
+        let mut rng = move || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((seed >> 33) as f64 / u32::MAX as f64) * 2.0 - 1.0
+        };
+        let mut l: Vec<f32> = (0..n).map(|_| (rng() * 0.15) as f32).collect();
+        let mut r: Vec<f32> = (0..n).map(|_| (rng() * 0.15) as f32).collect();
+        for i in (8000..n - 8000).step_by(48000 / 8) {
+            l[i] = 0.9;
+            r[i] = -0.9;
+        }
+        write_stereo_wav_f32(&src, &l, &r, sr).unwrap();
+        // Reference = source with a +6 dB high shelf at 2 kHz (and a
+        // low-shelf dip) so the match has real work to do.
+        let mut hs = Biquad::high_shelf(sr as f64, 2000.0, 0.7, 6.0);
+        let mut ls = Biquad::low_shelf(sr as f64, 200.0, 0.7, -3.0);
+        let rl: Vec<f32> = l
+            .iter()
+            .map(|&v| ls.tick(hs.tick(v as f64)) as f32)
+            .collect();
+        let rr: Vec<f32> = r
+            .iter()
+            .map(|&v| ls.tick(hs.tick(v as f64)) as f32)
+            .collect();
+        write_stereo_wav_f32(&refp, &rl, &rr, sr).unwrap();
+
+        let mut settings = RestoreSettings::default();
+        settings.target_lufs = -20.0;
+        settings.match_amount = 1.0;
+        settings.reference_path = Some(refp.to_string_lossy().to_string());
+        let req = RestoreRequest {
+            source_path: src.to_string_lossy().to_string(),
+            stems: vec![],
+            settings,
+            output_path: Some(out.to_string_lossy().to_string()),
+        };
+        let res = run_restore(&req, |_, _| {}).unwrap();
+        let ri = res.reference.expect("reference info missing");
+        assert!(
+            ri.distance_after_db < ri.distance_before_db,
+            "distance {} -> {}",
+            ri.distance_before_db,
+            ri.distance_after_db
+        );
+        let d = decode_audio_file(&res.output_path).unwrap();
+        let (ol, or_) = d.to_stereo_planar();
+        assert_eq!(ol.len(), n, "output length must equal source length");
+        let c = n / 2 - 48000;
+        assert_eq!(xcorr_lag(&l, &ol, c, 48000), 0, "restore lag L (ref)");
+        assert_eq!(xcorr_lag(&r, &or_, c, 48000), 0, "restore lag R (ref)");
+    }
+
+    #[test]
+    fn restore_with_drum_replace_has_zero_lag() {
+        // Drum reinforcement on a real drums stem: output stays
+        // sample-aligned, and turning the module off leaves the delta
+        // unchanged.
+        let dir = std::env::temp_dir().join("stemscribe_restore_drumlag");
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("drumlag_src.wav");
+        let stem = dir.join("drumlag_drums.wav");
+        let out = dir.join("drumlag_out.wav");
+        let sr = 48000u32;
+        let n = sr as usize * 3;
+        let mut seed = 0x2468ACEu64;
+        let mut rng = move || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((seed >> 33) as f64 / u32::MAX as f64) * 2.0 - 1.0
+        };
+        let l: Vec<f32> = (0..n).map(|_| (rng() * 0.1) as f32).collect();
+        let r: Vec<f32> = (0..n).map(|_| (rng() * 0.1) as f32).collect();
+        write_stereo_wav_f32(&src, &l, &r, sr).unwrap();
+        // Drums stem rendered from the bundled kit.
+        let kit = drum_hits::DrumKit::load(&drum_hits::kit_dir(), sr).unwrap();
+        let mut dl = vec![0.0f32; n];
+        let mut dr = vec![0.0f32; n];
+        for (i, &t) in [0.4f64, 1.0, 1.6, 2.2].iter().enumerate() {
+            let w = &kit.waves[0][3][i % 2];
+            let start = (t * sr as f64) as usize;
+            for (j, &s) in w.iter().enumerate() {
+                if start + j < n {
+                    dl[start + j] += s * 0.8;
+                    dr[start + j] += s * 0.8;
+                }
+            }
+        }
+        write_stereo_wav_f32(&stem, &dl, &dr, sr).unwrap();
+
+        let mk_req = |on: bool, outp: &Path| RestoreRequest {
+            source_path: src.to_string_lossy().to_string(),
+            stems: vec![StemIn {
+                name: "drums".to_string(),
+                file_path: stem.to_string_lossy().to_string(),
+            }],
+            settings: RestoreSettings {
+                target_lufs: -20.0,
+                drum_replace_amount: 0.5,
+                modules: RestoreModules {
+                    drum_replace: on,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            output_path: Some(outp.to_string_lossy().to_string()),
+        };
+        let res = run_restore(&mk_req(true, &out), |_, _| {}).unwrap();
+        assert!(
+            res.notes.iter().any(|n| n.contains("叠加真实鼓")),
+            "hit-count note missing: {:?}",
+            res.notes
+        );
+        let d = decode_audio_file(&res.output_path).unwrap();
+        let (ol, or_) = d.to_stereo_planar();
+        assert_eq!(ol.len(), n);
+        let c = n / 2 - 24000;
+        assert_eq!(xcorr_lag(&l, &ol, c, 24000), 0, "restore lag L (drums)");
+        assert_eq!(xcorr_lag(&r, &or_, c, 24000), 0, "restore lag R (drums)");
+        // Module off: identical output to a run without the module.
+        let off_out = dir.join("drumlag_off.wav");
+        let res_off = run_restore(&mk_req(false, &off_out), |_, _| {}).unwrap();
+        assert!(
+            !res_off.notes.iter().any(|n| n.contains("叠加真实鼓")),
+            "off run must not render reinforcement"
+        );
+    }
+
     /// Band energy ratio of `x` in [lo, hi] Hz vs its total.
     fn band_energy_ratio(x: &[f32], sr: f64, lo: f64, hi: f64) -> f64 {
         let mut hp = Biquad::high_pass(sr, lo, std::f64::consts::FRAC_1_SQRT_2);
@@ -1075,6 +1395,7 @@ mod tests {
                     hf_restore: false,
                     glue: false,
                     loudness: false,
+                    ..Default::default()
                 },
                 ..RestoreSettings::default()
             },

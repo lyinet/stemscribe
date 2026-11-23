@@ -25,7 +25,7 @@ use project::leadsheet::LeadSheetInput;
 use project::practice_log::PracticeRecord;
 use project::setlist::Setlist;
 use project::{ProjectSummary, StemScribeProject};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[tauri::command]
 async fn inspect_audio_file(file_path: String) -> Result<AudioMetadata, String> {
@@ -596,6 +596,14 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             menu::setup_macos_menu(app)?;
+            // Resolve the bundled drum kit (packaged resource dir, with a
+            // dev fallback handled by kit_dir()).
+            if let Ok(rd) = app.path().resource_dir() {
+                let kit = rd.join("resources/drums");
+                if kit.join("kit.json").exists() {
+                    audio::drum_hits::set_kit_dir(kit);
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

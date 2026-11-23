@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "StemScribe",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "identifier": "com.stemscribe.macos",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -26,13 +26,20 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/**", "$TEMP/**", "$HOME/**"]
+        "scope": [
+          "$APPDATA/**",
+          "$TEMP/**",
+          "$HOME/**"
+        ]
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app"],
+    "targets": [
+      "dmg",
+      "app"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -44,6 +51,9 @@
       "minimumSystemVersion": "13.0",
       "signingIdentity": "-",
       "entitlements": "Entitlements.plist"
-    }
+    },
+    "resources": [
+      "resources/drums"
+    ]
   }
 }

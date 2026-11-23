@@ -63,6 +63,22 @@ pub fn welch_psd(mono: &[f32], rate: u32) -> Vec<f64> {
     power
 }
 
+/// Mid/side 1/6-octave LTAS of a stereo buffer: (mid bands, side bands).
+/// Used by the reference-matching stage.
+pub fn ms_ltas(l: &[f32], r: &[f32], rate: u32) -> (Vec<BandLevel>, Vec<BandLevel>) {
+    let n = l.len().min(r.len());
+    let mut mid = Vec::with_capacity(n);
+    let mut side = Vec::with_capacity(n);
+    for i in 0..n {
+        mid.push((l[i] + r[i]) * 0.5);
+        side.push((l[i] - r[i]) * 0.5);
+    }
+    (
+        sixth_octave_bands(&welch_psd(&mid, rate), rate),
+        sixth_octave_bands(&welch_psd(&side, rate), rate),
+    )
+}
+
 /// 1/6-octave band levels from a Welch PSD. Bands run from 20 Hz up to the
 /// highest band whose centre is below `rate`/2.
 pub fn sixth_octave_bands(psd: &[f64], rate: u32) -> Vec<BandLevel> {

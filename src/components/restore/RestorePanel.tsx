@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, Eye, Pause, Play, Sparkles } from "lucide-react";
-import { resolveAudioUrl } from "../../lib/tauriApi";
+import { Download, Eye, Pause, Play, Sparkles, X } from "lucide-react";
+import { pickAudioFile, resolveAudioUrl } from "../../lib/tauriApi";
 import type {
   QualityIssue,
   QualityReport,
@@ -73,11 +73,20 @@ function fmtTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** Log-frequency LTAS plot: before (grey) vs after (accent). */
-const SpectrumPlot: React.FC<{ before: QualityReport | null; after: QualityReport | null }> = ({
-  before,
-  after,
-}) => {
+/** Mean dB of ltas bands in [lo, hi] Hz — bands are log-spaced. */
+function bandMean(ltas: { hz: number; db: number }[], lo: number, hi: number): number | null {
+  const sel = ltas.filter((b) => b.hz >= lo && b.hz <= hi);
+  if (sel.length === 0) return null;
+  return sel.reduce((s, b) => s + b.db, 0) / sel.length;
+}
+
+/** Log-frequency LTAS plot: before (grey) vs after (accent), optional
+ *  reference curve dashed, normalized to the after curve's 100 Hz–8 kHz mean. */
+const SpectrumPlot: React.FC<{
+  before: QualityReport | null;
+  after: QualityReport | null;
+  reference?: QualityReport | null;
+}> = ({ before, after, reference }) => {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -108,8 +117,17 @@ const SpectrumPlot: React.FC<{ before: QualityReport | null; after: QualityRepor
     const STRIP_H = hasDelta ? 30 : 0;
     const plotH = h - LABEL_H - STRIP_H;
 
+    // Reference curve normalized to the after curve's 100 Hz–8 kHz mean.
+    const anchor = after ?? before;
+    const anchorMean = anchor ? bandMean(anchor.ltas, 100, 8000) : null;
+    const refMean = reference ? bandMean(reference.ltas, 100, 8000) : null;
+    const refLtas =
+      reference && anchorMean != null && refMean != null
+        ? reference.ltas.map((b) => ({ hz: b.hz, db: b.db - refMean + anchorMean }))
+        : [];
+
     // dB range
-    const all = [...(before?.ltas ?? []), ...(after?.ltas ?? [])];
+    const all = [...(before?.ltas ?? []), ...(after?.ltas ?? []), ...refLtas];
     let lo = -80;
     let hi = -10;
     if (all.length > 0) {
@@ -156,6 +174,20 @@ const SpectrumPlot: React.FC<{ before: QualityReport | null; after: QualityRepor
     };
     drawCurve(before?.ltas ?? [], cBefore);
     drawCurve(after?.ltas ?? [], cAfter);
+    if (refLtas.length > 0) {
+      ctx.strokeStyle = cAfter;
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      refLtas.forEach((b, i) => {
+        const x = xOf(Math.max(F_MIN, b.hz));
+        const y = yOf(b.db);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
     // cutoff marker
     if (before?.cutoff_hz) {
@@ -207,7 +239,7 @@ const SpectrumPlot: React.FC<{ before: QualityReport | null; after: QualityRepor
       });
       ctx.stroke();
     }
-  }, [before, after]);
+  }, [before, after, reference]);
 
   return <canvas ref={ref} className="rp-spectrum" />;
 };
@@ -397,6 +429,15 @@ export const RestorePanel: React.FC<Props> = ({
         { label: "真峰值", before: `${before.true_peak_dbtp.toFixed(1)} dBTP`, after: after ? `${after.true_peak_dbtp.toFixed(1)} dBTP` : null },
         { label: "高频截止", before: cutoffLabel(before.cutoff_hz), after: after ? cutoffLabel(after.cutoff_hz) : null },
         { label: "规格", before: specLabel(before), after: after ? specLabel(after) : null },
+        ...(result?.reference
+          ? [
+              {
+                label: "与参考差距",
+                before: `${result.reference.distance_before_db.toFixed(1)} dB`,
+                after: `${result.reference.distance_after_db.toFixed(1)} dB`,
+              },
+            ]
+          : []),
       ]
     : [];
 
@@ -437,15 +478,64 @@ export const RestorePanel: React.FC<Props> = ({
 
         <section className="rp-col">
           <div className="rp-title">频谱</div>
-          <SpectrumPlot before={before} after={after} />
+          <SpectrumPlot before={before} after={after} reference={result?.reference?.report ?? null} />
           <div className="rp-legend">
             <span className="rp-swatch" style={{ background: "var(--text-3)" }} /> 修复前
             <span className="rp-swatch" style={{ background: "var(--accent)" }} /> 修复后
+            {result?.reference && <span className="rp-swatch dashed" />} {result?.reference ? "参考曲" : null}
           </div>
         </section>
 
         <section className="rp-col">
           <div className="rp-title">修复</div>
+          <div className="rp-row">
+            <span className="rp-label">参考曲</span>
+            {settings.reference_path ? (
+              <span className="rp-chip" title={settings.reference_path}>
+                {settings.reference_path.split("/").pop()}
+                <button
+                  className="rp-chip-x"
+                  disabled={running}
+                  title="清除参考曲"
+                  onClick={() =>
+                    onSettingsChange({ ...settings, reference_path: null })
+                  }
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ) : (
+              <button
+                className="btn btn-sm"
+                disabled={running}
+                onClick={async () => {
+                  const p = await pickAudioFile();
+                  if (p) onSettingsChange({ ...settings, reference_path: p });
+                }}
+              >
+                选择参考曲…
+              </button>
+            )}
+          </div>
+          {settings.reference_path && (
+            <div className="rp-row">
+              <span className="rp-label" />
+              <label className="rp-module">
+                <input
+                  type="checkbox"
+                  checked={settings.follow_reference_loudness}
+                  disabled={running}
+                  onChange={(e) =>
+                    onSettingsChange({
+                      ...settings,
+                      follow_reference_loudness: e.target.checked,
+                    })
+                  }
+                />
+                跟随参考响度
+              </label>
+            </div>
+          )}
           <div className="rp-row">
             <span className="rp-label">强度</span>
             <div className="seg">
@@ -510,6 +600,33 @@ export const RestorePanel: React.FC<Props> = ({
                   {mm.label}
                 </label>
               ))}
+              <label className="rp-module">
+                <input
+                  type="checkbox"
+                  checked={settings.modules.drum_replace}
+                  disabled={running}
+                  onChange={() => toggleModule("drum_replace")}
+                />
+                鼓替换（实验性，叠加底鼓 / 军鼓）
+              </label>
+              <div className="seg rp-drumseg">
+                {[
+                  { v: 0.3, l: "30%" },
+                  { v: 0.5, l: "50%" },
+                  { v: 0.8, l: "80%" },
+                ].map((o) => (
+                  <button
+                    key={o.v}
+                    className={settings.drum_replace_amount === o.v ? "on" : ""}
+                    disabled={running || !settings.modules.drum_replace}
+                    onClick={() =>
+                      onSettingsChange({ ...settings, drum_replace_amount: o.v })
+                    }
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </div>
             </div>
           </details>
           {result && result.notes.length > 0 && (
