@@ -45,6 +45,79 @@ pub struct QualityReport {
     pub issues: Vec<Issue>,
 }
 
+/// Per-band residual (level minus fitted line, dB) for every 200-500 Hz
+/// 1/6-octave band — used by the restore closed loop to cut each bump.
+pub(crate) fn low_mid_residuals(ltas: &[BandLevel]) -> Vec<(f32, f32)> {
+    let fit_band = |lo_f: f32, hi_f: f32| -> Vec<(f64, f64)> {
+        ltas.iter()
+            .filter(|b| b.hz >= lo_f && b.hz < hi_f)
+            .map(|b| ((b.hz as f64).log2(), b.db as f64))
+            .collect()
+    };
+    let mut pts = fit_band(100.0, 200.0);
+    pts.extend(fit_band(500.0, 1000.0));
+    let mut out = Vec::new();
+    if pts.len() >= 2 {
+        let np = pts.len() as f64;
+        let sx: f64 = pts.iter().map(|p| p.0).sum();
+        let sy: f64 = pts.iter().map(|p| p.1).sum();
+        let sxx: f64 = pts.iter().map(|p| p.0 * p.0).sum();
+        let sxy: f64 = pts.iter().map(|p| p.0 * p.1).sum();
+        let denom = np * sxx - sx * sx;
+        if denom.abs() > 1e-9 {
+            let slope = (np * sxy - sx * sy) / denom;
+            let intercept = (sy - slope * sx) / np;
+            for b in ltas.iter().filter(|b| b.hz >= 200.0 && b.hz < 500.0) {
+                out.push((b.hz, (b.db as f64 - (slope * (b.hz as f64).log2() + intercept)) as f32));
+            }
+        }
+    }
+    out
+}
+
+/// Low-mid excess + harsh-peak heuristics on a 1/6-octave LTAS, shared by
+/// `analyze_quality` and the restore engine's closed-loop EQ stage.
+/// Returns (low_mid_excess_db, low_mid_center_hz, harsh_peaks).
+pub(crate) fn band_heuristics(ltas: &[BandLevel]) -> (f32, f32, Vec<HarshPeak>) {
+    // Low-mid excess: straight line (dB vs log2 f) fitted on 100-200 & 500-1000
+    // bands, excess = max over 200-500 bands of (level - line).
+    let residuals = low_mid_residuals(ltas);
+    let mut low_mid_excess_db = 0.0f32;
+    let mut low_mid_center_hz = 0.0f32;
+    for (hz, resid) in &residuals {
+        if *resid > low_mid_excess_db {
+            low_mid_excess_db = *resid;
+            low_mid_center_hz = *hz;
+        }
+    }
+
+    // Harsh peaks: 2-8 kHz LTAS minus its 1-octave moving average.
+    let harsh_bands: Vec<BandLevel> = ltas
+        .iter()
+        .filter(|b| b.hz >= 2000.0 && b.hz < 8000.0)
+        .cloned()
+        .collect();
+    let mut harsh_peaks: Vec<HarshPeak> = Vec::new();
+    for (i, b) in harsh_bands.iter().enumerate() {
+        // 1-octave moving average centred on the band (±3 sixth-octave steps,
+        // clamped inside the 2-8k window).
+        let lo_i = i.saturating_sub(3);
+        let hi_i = (i + 3).min(harsh_bands.len() - 1);
+        let avg = mean_db(harsh_bands[lo_i..=hi_i].iter().map(|bb| bb.db as f64)) as f32;
+        let excess = b.db - avg;
+        if excess >= 2.5 {
+            harsh_peaks.push(HarshPeak {
+                hz: b.hz,
+                excess_db: excess,
+            });
+        }
+    }
+    harsh_peaks.sort_by(|a, b| b.excess_db.total_cmp(&a.excess_db));
+    harsh_peaks.truncate(4);
+    harsh_peaks.sort_by(|a, b| a.hz.total_cmp(&b.hz));
+    (low_mid_excess_db, low_mid_center_hz, harsh_peaks)
+}
+
 fn issue(id: &str, severity: &str, title: impl Into<String>, detail: impl Into<String>) -> Issue {
     Issue {
         id: id.to_string(),
@@ -215,62 +288,7 @@ pub fn analyze_quality(path: &str) -> Result<QualityReport> {
         }
     }
 
-    // Low-mid excess: straight line (dB vs log2 f) fitted on 100-200 & 500-1000
-    // bands, excess = max over 200-500 bands of (level - line).
-    let fit_band = |lo_f: f32, hi_f: f32| -> Vec<(f64, f64)> {
-        ltas.iter()
-            .filter(|b| b.hz >= lo_f && b.hz < hi_f)
-            .map(|b| ((b.hz as f64).log2(), b.db as f64))
-            .collect()
-    };
-    let mut pts = fit_band(100.0, 200.0);
-    pts.extend(fit_band(500.0, 1000.0));
-    let mut low_mid_excess_db = 0.0f32;
-    let mut low_mid_center_hz = 0.0f32;
-    if pts.len() >= 2 {
-        let np = pts.len() as f64;
-        let sx: f64 = pts.iter().map(|p| p.0).sum();
-        let sy: f64 = pts.iter().map(|p| p.1).sum();
-        let sxx: f64 = pts.iter().map(|p| p.0 * p.0).sum();
-        let sxy: f64 = pts.iter().map(|p| p.0 * p.1).sum();
-        let denom = np * sxx - sx * sx;
-        if denom.abs() > 1e-9 {
-            let slope = (np * sxy - sx * sy) / denom;
-            let intercept = (sy - slope * sx) / np;
-            for b in ltas.iter().filter(|b| b.hz >= 200.0 && b.hz < 500.0) {
-                let excess = b.db as f64 - (slope * (b.hz as f64).log2() + intercept);
-                if excess > low_mid_excess_db as f64 {
-                    low_mid_excess_db = excess as f32;
-                    low_mid_center_hz = b.hz;
-                }
-            }
-        }
-    }
-
-    // Harsh peaks: 2-8 kHz LTAS minus its 1-octave moving average.
-    let harsh_bands: Vec<BandLevel> = ltas
-        .iter()
-        .filter(|b| b.hz >= 2000.0 && b.hz < 8000.0)
-        .cloned()
-        .collect();
-    let mut harsh_peaks: Vec<HarshPeak> = Vec::new();
-    for (i, b) in harsh_bands.iter().enumerate() {
-        // 1-octave moving average centred on the band (±3 sixth-octave steps,
-        // clamped inside the 2-8k window).
-        let lo_i = i.saturating_sub(3);
-        let hi_i = (i + 3).min(harsh_bands.len() - 1);
-        let avg = mean_db(harsh_bands[lo_i..=hi_i].iter().map(|bb| bb.db as f64)) as f32;
-        let excess = b.db - avg;
-        if excess >= 2.5 {
-            harsh_peaks.push(HarshPeak {
-                hz: b.hz,
-                excess_db: excess,
-            });
-        }
-    }
-    harsh_peaks.sort_by(|a, b| b.excess_db.total_cmp(&a.excess_db));
-    harsh_peaks.truncate(4);
-    harsh_peaks.sort_by(|a, b| a.hz.total_cmp(&b.hz));
+    let (low_mid_excess_db, low_mid_center_hz, harsh_peaks) = band_heuristics(&ltas);
 
     // --- Stereo stats ---
     let stereo_correlation = if is_mono {

@@ -322,3 +322,82 @@ export interface QualityReport {
   ltas: BandLevel[];
   issues: QualityIssue[];
 }
+
+// ---- H2: audio restoration ----
+
+export interface RestoreStemIn {
+  name: string;
+  file_path: string;
+}
+
+export interface RestoreModules {
+  vocal_cleanup: boolean;
+  shimmer: boolean;
+  drum_punch: boolean;
+  low_end: boolean;
+  width: boolean;
+  vocal_space: boolean;
+  hf_restore: boolean;
+  glue: boolean;
+  loudness: boolean;
+}
+
+export interface RestoreSettings {
+  /** 0.5 light / 1.0 standard / 1.5 strong */
+  strength: number;
+  modules: RestoreModules;
+  target_lufs: number;
+  ceiling_dbtp: number;
+  /** 24 or 16 */
+  bit_depth: number;
+}
+
+export interface RestoreRequest {
+  source_path: string;
+  stems: RestoreStemIn[];
+  settings: RestoreSettings;
+  output_path?: string | null;
+}
+
+export interface RestoreResult {
+  output_path: string;
+  sample_rate: number;
+  bit_depth: number;
+  before: QualityReport;
+  after: QualityReport;
+  loudness_match_db: number;
+  limiter_avg_gr_db: number;
+  notes: string[];
+  elapsed_ms: number;
+}
+
+export type RestoreStage =
+  | "analyze"
+  | "stems"
+  | "master"
+  | "limit"
+  | "write"
+  | "report";
+
+export interface RestoreProgress {
+  stage: RestoreStage;
+  percent: number;
+}
+
+export const DEFAULT_RESTORE_SETTINGS: RestoreSettings = {
+  strength: 1.0,
+  modules: {
+    vocal_cleanup: true,
+    shimmer: true,
+    drum_punch: true,
+    low_end: true,
+    width: true,
+    vocal_space: true,
+    hf_restore: true,
+    glue: true,
+    loudness: true,
+  },
+  target_lufs: -14.0,
+  ceiling_dbtp: -1.0,
+  bit_depth: 24,
+};

@@ -25,7 +25,7 @@ use project::leadsheet::LeadSheetInput;
 use project::practice_log::PracticeRecord;
 use project::setlist::Setlist;
 use project::{ProjectSummary, StemScribeProject};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
 async fn inspect_audio_file(file_path: String) -> Result<AudioMetadata, String> {
@@ -110,6 +110,51 @@ async fn analyze_audio_quality(file_path: String) -> Result<audio::quality::Qual
         .await
         .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn restore_audio(
+    app: AppHandle,
+    request: audio::restore::RestoreRequest,
+) -> Result<audio::restore::RestoreResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let app2 = app.clone();
+        audio::restore::run_restore(&request, move |stage, percent| {
+            let _ = app2.emit(
+                "restore-progress",
+                serde_json::json!({ "stage": stage, "percent": percent }),
+            );
+        })
+    })
+    .await
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn export_restored_wav(
+    render_path: String,
+    save_path: String,
+    bit_depth: u16,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        if bit_depth == 24 {
+            std::fs::copy(&render_path, &save_path)?;
+        } else {
+            let d = audio::decode_audio_file(&render_path)?;
+            let (l, r) = d.to_stereo_planar();
+            audio::restore::write_stereo_wav_i16_tpdf(
+                std::path::Path::new(&save_path),
+                &l,
+                &r,
+                d.sample_rate,
+            )?;
+        }
+        Ok::<String, anyhow::Error>(save_path)
+    })
+    .await
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -564,6 +609,8 @@ pub fn run() {
             export_audio_slice_wav,
             export_mixed_wav,
             analyze_audio_quality,
+            restore_audio,
+            export_restored_wav,
             save_recorded_take_wav,
             mix_take_with_stems_wav,
             list_midi_inputs,

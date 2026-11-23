@@ -34,6 +34,8 @@ import type {
   SystemDiagnostics,
   TempoAndLoudness,
   QualityReport,
+  RestoreRequest,
+  RestoreResult,
   TranscriptionResult,
 } from "../types/music";
 
@@ -827,5 +829,60 @@ export async function refineMidiWithLlm(
     sliceStartSec,
     sliceEndSec,
     config,
+  });
+}
+
+export async function restoreAudio(
+  request: RestoreRequest,
+): Promise<RestoreResult> {
+  if (!isTauriRuntime()) {
+    const mockReport = (tag: string): QualityReport => ({
+      sample_rate: 48000,
+      channels: 2,
+      bit_depth: 24,
+      duration_sec: 240,
+      integrated_lufs: -14.0,
+      lra_lu: 7.0,
+      true_peak_dbtp: -1.0,
+      sample_peak_dbfs: -1.2,
+      cutoff_hz: null,
+      low_mid_excess_db: 0,
+      low_mid_center_hz: 0,
+      harsh_peaks: [],
+      stereo_correlation: 0.9,
+      side_mid_ratio_db: -10.0,
+      low_band_correlation: 0.95,
+      clipped_runs: 0,
+      dc_offset: [0, 0],
+      ltas: [],
+      issues: [{ id: "mock", severity: "ok", title: "演示模式", detail: tag }],
+    });
+    return {
+      output_path: "/tmp/mock_restored.wav",
+      sample_rate: 48000,
+      bit_depth: 24,
+      before: mockReport("修复前（演示数据）"),
+      after: mockReport("修复后（演示数据）"),
+      loudness_match_db: 0,
+      limiter_avg_gr_db: 0.8,
+      notes: ["浏览器演示模式，未实际处理"],
+      elapsed_ms: 1200,
+    };
+  }
+  return invoke<RestoreResult>("restore_audio", { request });
+}
+
+export async function exportRestoredWav(
+  renderPath: string,
+  savePath: string,
+  bitDepth: number,
+): Promise<string> {
+  if (!isTauriRuntime()) {
+    return savePath;
+  }
+  return invoke<string>("export_restored_wav", {
+    renderPath,
+    savePath,
+    bitDepth,
   });
 }
