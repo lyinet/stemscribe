@@ -99,7 +99,7 @@ pub fn role_label_zh(role: &str) -> &'static str {
 
 /// Engine-side role: explicit `role` wins; otherwise derive from the stem
 /// name, defaulting to Other (a stem is never a "mix").
-fn stem_role(st: &StemIn) -> StemRole {
+pub(crate) fn stem_role(st: &StemIn) -> StemRole {
     match st.role.as_str() {
         "lead" | "lead_vocal" | "vocal" | "vocals" => StemRole::Lead,
         "backing" | "backing_vocal" | "bgv" => StemRole::Backing,
@@ -831,24 +831,24 @@ pub fn run_restore(
 /// Everything decoded/analyzed once for one or more renders of the same
 /// source + stems: source PCM at work rate, before-report, optional
 /// reference, drum kit, per-stem 44.1k PCM cache (compare mode), notes.
-struct RestoreCtx {
-    before: QualityReport,
+pub(crate) struct RestoreCtx {
+    pub(crate) before: QualityReport,
     xw_l: Vec<f32>,
     xw_r: Vec<f32>,
     n: usize,
     work_rate: u32,
-    stem_mode: bool,
+    pub(crate) stem_mode: bool,
     vocals_weak: bool,
     ref_ctx: Option<(QualityReport, Vec<BandLevel>, Vec<BandLevel>, f64)>,
     drum_kit: Option<drum_hits::DrumKit>,
     stem_pcm: Option<Vec<(Vec<f32>, Vec<f32>)>>,
-    notes: Vec<String>,
+    pub(crate) notes: Vec<String>,
 }
 
 /// Cap on the compare-mode stem PCM cache (44.1k f32 stereo per stem).
 const STEM_CACHE_MAX_BYTES: usize = 512 * 1024 * 1024;
 
-fn prepare_restore(
+pub(crate) fn prepare_restore(
     req: &RestoreRequest,
     emit: &mut dyn FnMut(&str, f32),
     cache_stems: bool,
@@ -1249,7 +1249,7 @@ fn render_stems(
 
 /// LRA guard: if the render flattened macro-dynamics beyond 1 LU,
 /// re-render with dynamics scaled down (max 2 retries).
-fn render_lra_guarded(
+pub(crate) fn render_lra_guarded(
     ctx: &RestoreCtx,
     req: &RestoreRequest,
     emit: &mut dyn FnMut(&str, f32),
@@ -1280,7 +1280,7 @@ fn render_lra_guarded(
 }
 
 /// Write the render, re-analyze, assemble notes/reference/objective/critic.
-fn finish_render(
+pub(crate) fn finish_render(
     ctx: &RestoreCtx,
     req: &RestoreRequest,
     y_l: Vec<f32>,
@@ -1375,7 +1375,7 @@ fn finish_render(
 }
 
 /// Audiobox Aesthetics score when the model is installed; silently None.
-fn critic_score_opt(path: &str) -> Option<super::quality::critic::CriticScore> {
+pub(crate) fn critic_score_opt(path: &str) -> Option<super::quality::critic::CriticScore> {
     match crate::ml::audiobox_aes_model_path() {
         Ok(p) if p.exists() => super::quality::critic::score_audio(path).ok(),
         _ => None,
@@ -1565,7 +1565,7 @@ pub fn run_restore_compare(
     })
 }
 
-fn renders_dir() -> Result<std::path::PathBuf> {
+pub(crate) fn renders_dir() -> Result<std::path::PathBuf> {
     let home = std::env::var("HOME").map_err(|_| anyhow!("无法定位 HOME"))?;
     Ok(Path::new(&home)
         .join("Library/Application Support/StemScribe/renders"))

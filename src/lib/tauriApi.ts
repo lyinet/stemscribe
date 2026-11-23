@@ -5,6 +5,9 @@ import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import type {
   AdvisorInput,
   AdvisorResult,
+  AgentBaseline,
+  AgentProgress,
+  AgentResult,
   ArrangementAnalysis,
   AudioMetadata,
   BatchJobOptions,
@@ -976,6 +979,87 @@ export async function adviseRestoration(
     };
   }
   return invoke<AdvisorResult>("advise_restoration", { config, input });
+}
+
+export async function restoreAgent(
+  config: LlmRelayConfig,
+  request: RestoreRequest,
+  userRequest: string,
+  maxRounds: number,
+  baseline: AgentBaseline | null,
+): Promise<AgentResult> {
+  if (!isTauriRuntime()) {
+    const mkRecord = (
+      round: number,
+      score: number | null,
+      accepted: boolean,
+      reject_reason: string | null,
+      changes: AgentResult["history"][number]["changes"],
+      explanation: string[],
+    ) => ({
+      round,
+      changes,
+      explanation,
+      confidence: "medium",
+      score,
+      terms: null,
+      accepted,
+      reject_reason,
+      output_path: round === 0 ? null : `/tmp/mock_agent_r${round}.wav`,
+      elapsed_ms: 45000,
+      error: null,
+    });
+    const bestResult = (await restoreAudio(request)) as RestoreResult;
+    return {
+      best: { ...bestResult, output_path: "/tmp/mock_agent_r1.wav" },
+      best_round: 1,
+      history: [
+        mkRecord(0, 3.1, true, null, [], ["基线：当前参数渲染"]),
+        mkRecord(
+          1,
+          0.9,
+          true,
+          null,
+          [
+            { field: "vocal_presence_db", label_zh: "人声清晰度", from: 0, to: 1.5 },
+            { field: "low_shelf_db", label_zh: "整体低频", from: 0, to: -1 },
+          ],
+          ["3.6 kHz 刺耳峰压制后人声偏闷，清晰度 +1.5", "低频架 −1 dB 减少轰感"],
+        ),
+        mkRecord(
+          2,
+          1.4,
+          false,
+          "动态被压平（LRA 4.3 → 3.1 LU）",
+          [
+            { field: "strength", label_zh: "整体强度", from: 1, to: 1.5 },
+            { field: "glue", label_zh: "母带粘合", from: 1, to: 1.5 },
+          ],
+          ["尝试更强处理"],
+        ),
+      ],
+      stop_reason: "no_improvement",
+    };
+  }
+  return invoke<AgentResult>("restore_agent", {
+    config,
+    request,
+    userRequest,
+    maxRounds,
+    baseline,
+  });
+}
+
+export async function stopRestoreAgent(): Promise<void> {
+  if (!isTauriRuntime()) return;
+  return invoke<void>("restore_agent_stop");
+}
+
+export async function onAgentProgress(
+  handler: (p: AgentProgress) => void,
+): Promise<UnlistenFn> {
+  if (!isTauriRuntime()) return () => {};
+  return listen<AgentProgress>("agent-progress", (e) => handler(e.payload));
 }
 
 export async function guessStemRoles(filePaths: string[]): Promise<string[]> {

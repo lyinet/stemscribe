@@ -2491,6 +2491,94 @@ input[type="range"]:not(.eq-fader):disabled::-webkit-slider-thumb {
   color: var(--rose);
 }
 
+.rp-agent-timeline {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+}
+
+.rp-agent-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0 4px 14px;
+  position: relative;
+  font-size: 11px;
+  color: var(--text-1);
+}
+
+.rp-agent-row::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sage);
+}
+
+.rp-agent-row:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 6.5px;
+  top: 15px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--hairline-strong);
+}
+
+.rp-agent-row.running::before {
+  background: var(--amber);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.rp-agent-row.rejected::before {
+  background: var(--rose);
+}
+
+.rp-agent-row.rejected {
+  color: var(--text-3);
+}
+
+.rp-agent-round {
+  font-weight: 600;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.rp-agent-detail {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+}
+
+.rp-agent-score {
+  font-family: "SF Mono", ui-monospace, monospace;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.rp-agent-verdict {
+  flex-shrink: 0;
+}
+
+.rp-agent-stage {
+  color: var(--amber);
+}
+
+.rp-agent-summary {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+  font-size: 11px;
+  color: var(--text-1);
+}
+
 .rp-proposal {
   margin-top: 8px;
   padding: 8px 10px;

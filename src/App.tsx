@@ -110,8 +110,11 @@ import {
   pickWavSavePath,
   refineMidiWithLlm,
   reharmonizeChordsLocal,
+  restoreAgent,
   restoreAudio,
   restoreCompare,
+  onAgentProgress,
+  stopRestoreAgent,
   savePracticeRecord,
   deleteProjectFile,
   renameProjectFile,
@@ -124,6 +127,8 @@ import {
 } from "./lib/tauriApi";
 import { HardwareMidiBridge, type MidiInputDeviceInfo } from "./lib/webMidi";
 import type {
+  AgentProgress,
+  AgentResult,
   ArrangementAnalysis,
   AudioMetadata,
   ChordEvent,
@@ -1636,6 +1641,81 @@ export const App: React.FC = () => {
     setAdvisorRegress(null);
   };
 
+  // ---------- AI 多轮自动修复 ----------
+  const [agentRunning, setAgentRunning] = useState(false);
+  const [agentRows, setAgentRows] = useState<Record<number, AgentProgress>>({});
+  const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
+  const agentProgressRows = useMemo(
+    () => Object.values(agentRows).sort((a, b) => a.round - b.round),
+    [agentRows]
+  );
+
+  const handleRunAgent = async (userRequest: string) => {
+    if (!audioMeta || restoring || agentRunning) return;
+    if (isDemoBlobPath(audioMeta.file_path)) {
+      setStatusMsg("演示曲不支持修复，请导入自己的歌曲。");
+      return;
+    }
+    setStudioTab("restore");
+    setEditorOpen(true);
+    try {
+      if (!qualityBefore) {
+        setStatusMsg("音质诊断中…");
+        setQualityBefore(await analyzeAudioQuality(audioMeta.file_path));
+      }
+      const useStems = await ensureStemsForRestore();
+      setAgentRunning(true);
+      setAgentResult(null);
+      setAgentRows({});
+      const unlisten = await onAgentProgress((p) =>
+        setAgentRows((m) => ({ ...m, [p.round]: p }))
+      );
+      try {
+        const baseline =
+          restoreResult?.objective != null
+            ? {
+                output_path: restoreResult.output_path,
+                report: restoreResult.after,
+                score: restoreResult.objective.score,
+                terms: restoreResult.objective.terms,
+              }
+            : null;
+        const res = await restoreAgent(
+          relayConfig,
+          {
+            source_path: audioMeta.file_path,
+            stems: useStems.map((s) => ({
+              name: s.name,
+              file_path: s.file_path,
+              role: s.role ?? "",
+            })),
+            settings: restoreSettings,
+            output_path: null,
+          },
+          userRequest,
+          3,
+          baseline
+        );
+        setAgentResult(res);
+        setRestoreResult(res.best);
+        setQualityBefore(res.best.before);
+        setStatusMsg(
+          `多轮修复完成：${res.best_round === 0 ? "基线" : `第 ${res.best_round} 轮`} 最好`
+        );
+      } finally {
+        unlisten();
+        setAgentRunning(false);
+      }
+    } catch (err) {
+      setAgentRunning(false);
+      setStatusMsg(`多轮修复失败: ${String(err)}`);
+    }
+  };
+
+  const handleStopAgent = () => {
+    void stopRestoreAgent();
+  };
+
   const advisorStemRoles = useMemo(
     () =>
       stems.map((s) => {
@@ -2410,6 +2490,11 @@ export const App: React.FC = () => {
               }
               onRevertAdvisor={handleRevertAdvisor}
               onOpenAiSettings={() => openSettings("ai")}
+              onRunAgent={handleRunAgent}
+              agentRunning={agentRunning}
+              onStopAgent={handleStopAgent}
+              agentProgressRows={agentProgressRows}
+              agentResult={agentResult}
             />
           )}
 

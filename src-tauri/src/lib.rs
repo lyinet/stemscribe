@@ -15,6 +15,7 @@ use audio::structure::SongStructureSegment;
 use audio::takes::SavedTakeInfo;
 use audio::{AudioMetadata, StemMixInput};
 use batch::{BatchJobOptions, BatchJobSummary};
+use audio::agent::{AgentBaseline, AgentProgress, AgentResult};
 use llm::advisor::{AdvisorInput, AdvisorResult};
 use llm::lyrics::LyricLine;
 use llm::{ArrangementAnalysis, LlmRelayConfig, RefinedScoreResponse};
@@ -140,6 +141,35 @@ async fn restore_audio(
     .await
     .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn restore_agent(
+    app: AppHandle,
+    config: LlmRelayConfig,
+    request: audio::restore::RestoreRequest,
+    user_request: Option<String>,
+    max_rounds: Option<u32>,
+    baseline: Option<AgentBaseline>,
+) -> Result<AgentResult, String> {
+    let emit = move |p: AgentProgress| {
+        let _ = app.emit("agent-progress", &p);
+    };
+    audio::agent::run_restore_agent(
+        &config,
+        &request,
+        user_request.as_deref().unwrap_or(""),
+        baseline,
+        max_rounds.unwrap_or(3) as usize,
+        emit,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn restore_agent_stop() {
+    audio::agent::cancel_agent();
 }
 
 #[tauri::command]
@@ -732,7 +762,9 @@ pub fn run() {
             test_llm_relay_connection,
             analyze_arrangement_with_llm,
             refine_midi_with_llm,
-            advise_restoration
+            advise_restoration,
+            restore_agent,
+            restore_agent_stop
         ])
         .run(tauri::generate_context!())
         .expect("error while running StemScribe");

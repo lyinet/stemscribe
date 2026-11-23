@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod bpm;
 pub mod chords;
 pub mod drum_hits;

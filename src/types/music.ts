@@ -424,6 +424,47 @@ export interface AdvisorResult {
   raw: string;
 }
 
+export interface AgentProgress {
+  round: number;
+  /** "prepare" | "advise" | "render" | "score" | "done" */
+  stage: string;
+  percent: number;
+}
+
+export interface AgentTerm {
+  name: string;
+  value: number;
+}
+
+/** A previous RestoreResult the agent can reuse as round-0 baseline. */
+export interface AgentBaseline {
+  output_path: string;
+  report: QualityReport;
+  score: number;
+  terms?: AgentTerm[];
+}
+
+export interface AgentRoundRecord {
+  round: number;
+  changes: AdvisorChange[];
+  explanation: string[];
+  confidence?: string | null;
+  score?: number | null;
+  terms?: unknown;
+  accepted: boolean;
+  reject_reason?: string | null;
+  output_path?: string | null;
+  elapsed_ms: number;
+  error?: string | null;
+}
+
+export interface AgentResult {
+  best: RestoreResult;
+  best_round: number;
+  history: AgentRoundRecord[];
+  stop_reason: string;
+}
+
 export interface RestoreRequest {
   source_path: string;
   stems: RestoreStemIn[];

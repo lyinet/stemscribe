@@ -4,6 +4,8 @@ import { adviseRestoration, pickAudioFile, resolveAudioUrl } from "../../lib/tau
 import type {
   AdvisorInput,
   AdvisorResult,
+  AgentProgress,
+  AgentResult,
   CompareResult,
   LlmRelayConfig,
   QualityIssue,
@@ -38,6 +40,12 @@ interface Props {
   advisorRegress: { prevScore: number; newScore: number } | null;
   onRevertAdvisor: () => void;
   onOpenAiSettings: () => void;
+  /** 多轮自动修复（实验性） */
+  onRunAgent: (userRequest: string) => void;
+  agentRunning: boolean;
+  onStopAgent: () => void;
+  agentProgressRows: AgentProgress[];
+  agentResult: AgentResult | null;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -94,6 +102,24 @@ const CONF_LABELS: Record<string, string> = {
   low: "置信度：低",
   medium: "置信度：中",
   high: "置信度：高",
+};
+
+const AGENT_STAGE_LABELS: Record<string, string> = {
+  prepare: "准备（解码/诊断）",
+  advise: "AI 参谋思考中",
+  render: "渲染中",
+  score: "评分中",
+  done: "完成",
+};
+
+const STOP_REASON_LABELS: Record<string, string> = {
+  max_rounds: "达到最大轮数",
+  no_changes: "AI 未给出新参数",
+  no_improvement: "连续两轮无提升",
+  target_reached: "评分已达标",
+  advisor_error: "AI 调用失败",
+  render_error: "渲染失败",
+  cancelled: "已手动停止",
 };
 
 function fmtAdvisorVal(v: number | boolean): string {
@@ -355,6 +381,11 @@ export const RestorePanel: React.FC<Props> = ({
   advisorRegress,
   onRevertAdvisor,
   onOpenAiSettings,
+  onRunAgent,
+  agentRunning,
+  onStopAgent,
+  agentProgressRows,
+  agentResult,
 }) => {
   const after = result?.after ?? null;
   const issues = useMemo(() => mergeIssues(before, after), [before, after]);
@@ -761,12 +792,25 @@ export const RestorePanel: React.FC<Props> = ({
             <div className="rp-advisor-row">
               <button
                 className="btn btn-sm"
-                disabled={running || advising || !llmReady || !before}
+                disabled={running || advising || agentRunning || !llmReady || !before}
                 title={!before ? "先完成一次修复/诊断" : undefined}
                 onClick={askAdvisor}
               >
                 {advising ? "AI 思考中…" : "让 AI 出方案"}
               </button>
+              <button
+                className="btn btn-sm"
+                disabled={running || advising || agentRunning || !llmReady || !before}
+                title="让 AI 连续出几轮方案并自动渲染比较，保留评分最好的结果"
+                onClick={() => onRunAgent(advisorText)}
+              >
+                {agentRunning ? "多轮修复中…" : "AI 多轮自动修复（实验性）"}
+              </button>
+              {agentRunning && (
+                <button className="btn btn-sm" onClick={onStopAgent}>
+                  停止
+                </button>
+              )}
               {!llmReady && (
                 <button className="rp-link" onClick={onOpenAiSettings}>
                   先在设置里配置 AI 服务
@@ -777,6 +821,81 @@ export const RestorePanel: React.FC<Props> = ({
               )}
             </div>
             {advisorError && <div className="rp-advisor-err">{advisorError}</div>}
+            {(agentRunning || agentResult) && (
+              <div className="rp-agent-timeline">
+                {(agentResult ? agentResult.history : agentProgressRows).map((row) => {
+                  if ("stage" in row && !("accepted" in row)) {
+                    const p = row as AgentProgress;
+                    return (
+                      <div key={`p${p.round}`} className="rp-agent-row running">
+                        <span className="rp-agent-round">
+                          {p.round === 0 ? "基线" : `第 ${p.round} 轮`}
+                        </span>
+                        <span className="rp-agent-stage">
+                          {AGENT_STAGE_LABELS[p.stage] ?? p.stage} ·{" "}
+                          {Math.round(p.percent)}%
+                        </span>
+                      </div>
+                    );
+                  }
+                  const r = row as AgentResult["history"][number];
+                  const changeStr =
+                    r.changes.length > 0
+                      ? r.changes
+                          .map(
+                            (c) =>
+                              `${c.label_zh} ${fmtAdvisorVal(c.from)}→${fmtAdvisorVal(c.to)}`,
+                          )
+                          .join("、")
+                      : r.round === 0
+                        ? "当前参数"
+                        : "无变更";
+                  return (
+                    <div
+                      key={`h${r.round}`}
+                      className={`rp-agent-row${r.accepted ? "" : " rejected"}`}
+                    >
+                      <span className="rp-agent-round">
+                        {r.round === 0 ? "基线" : `第 ${r.round} 轮`}
+                      </span>
+                      <span className="rp-agent-detail">{changeStr}</span>
+                      {r.score != null && (
+                        <span className="rp-agent-score">S={r.score.toFixed(2)}</span>
+                      )}
+                      <span className="rp-agent-verdict">
+                        {r.error
+                          ? `失败：${r.error}`
+                          : r.accepted
+                            ? "采用"
+                            : `未采用${r.reject_reason ? `：${r.reject_reason}` : ""}`}
+                      </span>
+                    </div>
+                  );
+                })}
+                {agentResult && (
+                  <div className="rp-agent-summary">
+                    {(() => {
+                      const s0 = agentResult.history[0]?.score;
+                      const sb = agentResult.history.find(
+                        (r) => r.round === agentResult.best_round && r.accepted,
+                      )?.score;
+                      const rej = agentResult.history
+                        .filter((r) => r.round > 0 && !r.accepted)
+                        .map(
+                          (r) =>
+                            `第 ${r.round} 轮未采用${r.reject_reason ? `：${r.reject_reason}` : r.error ? `：${r.error}` : ""}`,
+                        )
+                        .join("；");
+                      return `${
+                        agentResult.best_round === 0 ? "基线" : `第 ${agentResult.best_round} 轮`
+                      }最好：评分 ${s0 != null ? s0.toFixed(2) : "?"} → ${
+                        sb != null ? sb.toFixed(2) : agentResult.best.objective?.score.toFixed(2) ?? "?"
+                      }${rej ? `；${rej}` : ""}（${STOP_REASON_LABELS[agentResult.stop_reason] ?? agentResult.stop_reason}）`;
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
             {proposal && (
               <div className="rp-proposal">
                 <div className="rp-proposal-head">
