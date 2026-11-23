@@ -50,7 +50,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force `
             src-tauri/target/debug/deps, src-tauri/target/debug/examples, `
-            src-tauri/target/release/deps, src-tauri/target/release/examples | Out-Null
+            src-tauri/target/debug/build/deps, src-tauri/target/debug/build/examples, `
+            src-tauri/target/release/deps, src-tauri/target/release/examples, `
+            src-tauri/target/release/build/deps, src-tauri/target/release/build/examples | Out-Null
         shell: pwsh
 
       - name: Run Rust unit tests
