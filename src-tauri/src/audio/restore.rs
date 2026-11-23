@@ -1566,9 +1566,8 @@ pub fn run_restore_compare(
 }
 
 pub(crate) fn renders_dir() -> Result<std::path::PathBuf> {
-    let home = std::env::var("HOME").map_err(|_| anyhow!("无法定位 HOME"))?;
-    Ok(Path::new(&home)
-        .join("Library/Application Support/StemScribe/renders"))
+    let base = dirs::data_dir().ok_or_else(|| anyhow!("无法定位应用数据目录"))?;
+    Ok(base.join("StemScribe").join("renders"))
 }
 
 /// 16-bit WAV with TPDF dither.

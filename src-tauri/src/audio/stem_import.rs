@@ -34,8 +34,8 @@ pub struct ImportedStems {
 }
 
 fn imports_dir() -> Result<PathBuf> {
-    let home = std::env::var("HOME").map_err(|_| anyhow!("无法定位 HOME"))?;
-    Ok(Path::new(&home).join("Library/Application Support/StemScribe/imports"))
+    let base = dirs::data_dir().ok_or_else(|| anyhow!("无法定位应用数据目录"))?;
+    Ok(base.join("StemScribe").join("imports"))
 }
 
 fn rms(v: &[f32]) -> f64 {

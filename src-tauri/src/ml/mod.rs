@@ -4,6 +4,7 @@ pub mod separator;
 pub mod transcriber;
 
 use anyhow::{Context, Result};
+#[cfg(target_os = "macos")]
 use ort::execution_providers::CoreMLExecutionProvider;
 use ort::session::{builder::GraphOptimizationLevel, Session};
 use serde::{Deserialize, Serialize};
@@ -64,6 +65,7 @@ pub fn build_cpu_session(model_path: &PathBuf) -> Result<Session> {
 
 fn build_session(model_path: &PathBuf, use_coreml: bool) -> Result<Session> {
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 8);
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let mut builder = Session::builder()?
         .with_optimization_level(GraphOptimizationLevel::Level3)?
         // The pre-planned memory pattern reserves one arena sized to the
