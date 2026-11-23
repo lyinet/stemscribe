@@ -132,47 +132,55 @@ impl Compressor {
         let mut gr_cnt = 0usize;
         // Trailing 3 s RMS envelope of the detector (per-sample dB level),
         // used as the level-relative threshold base when tracking is on.
-        let mut track_thr: Vec<f64> = Vec::new();
-        if let Some(off) = self.track_offset {
-            let w = self.track_win.max(1);
-            track_thr = Vec::with_capacity(n);
-            let mut acc = 0.0f64;
-            let mut cnt = 0usize;
-            for i in 0..n {
-                let s = (dl[i] as f64 * dl[i] as f64 + dr[i] as f64 * dr[i] as f64) * 0.5;
-                acc += s;
-                cnt += 1;
-                if cnt > w {
-                    let s0 =
-                        (dl[i - w] as f64 * dl[i - w] as f64 + dr[i - w] as f64 * dr[i - w] as f64)
-                            * 0.5;
-                    acc -= s0;
-                    cnt -= 1;
-                }
-                let mean = (acc / cnt as f64).max(1e-20);
-                track_thr.push(10.0 * mean.log10() + off);
-            }
-        }
+        // The window is causal (trailing), so the threshold is evaluated
+        // inline in the main loop — every 32nd sample, held in between
+        // (error << 0.01 dB over 32 samples).
+        let track_w = self.track_win.max(1);
+        let mut track_acc = 0.0f64;
+        let mut track_cnt = 0usize;
+        let mut track_thr = 0.0f64;
+        // -50 dBFS activity gate in the power domain — no log per sample.
+        let active_gate = 10f64.powf(-50.0 / 10.0);
+        // Detector level in dB tracked incrementally: between attacks the
+        // envelope decays by a constant ratio, so its dB level moves by a
+        // constant per sample. A log10 is only needed on attack resets.
+        let det_rel_db = db(self.det_rel);
+        let mut det_db = db(self.det_env);
         for i in 0..n {
             let x = dl[i].abs().max(dr[i].abs()) as f64;
             // Peak-hold detector (instant attack, release decay) reads the
             // signal's peak amplitude; GR then gets attack/release ballistics.
             self.det_env = self.det_env * self.det_rel;
+            det_db += det_rel_db;
             if x > self.det_env {
                 self.det_env = x;
+                det_db = db(x);
             }
-            let thr = if self.track_offset.is_some() {
-                track_thr[i]
+            let thr = if let Some(off) = self.track_offset {
+                let s = (dl[i] as f64 * dl[i] as f64 + dr[i] as f64 * dr[i] as f64) * 0.5;
+                track_acc += s;
+                track_cnt += 1;
+                if track_cnt > track_w {
+                    let s0 = (dl[i - track_w] as f64 * dl[i - track_w] as f64
+                        + dr[i - track_w] as f64 * dr[i - track_w] as f64)
+                        * 0.5;
+                    track_acc -= s0;
+                    track_cnt -= 1;
+                }
+                if i % 32 == 0 {
+                    let mean = (track_acc / track_cnt as f64).max(1e-20);
+                    track_thr = 10.0 * mean.log10() + off;
+                }
+                track_thr
             } else {
                 self.threshold_db
             };
-            let gr_inst = self.gain_computer(db(self.det_env), thr);
+            let gr_inst = self.gain_computer(det_db, thr);
             let gr_db = env.tick(gr_inst);
-            let g = 10f64.powf(-gr_db / 20.0);
+            let g = (-gr_db * 0.11512925464970229).exp(); // 10^(-gr/20)
             out_l.push((l[i] as f64 * g) as f32);
             out_r.push((r[i] as f64 * g) as f32);
-            let le = db(l[i].abs() as f64);
-            if le > -50.0 {
+            if (l[i] as f64) * (l[i] as f64) > active_gate {
                 active_e += (l[i] as f64) * (l[i] as f64) + (r[i] as f64) * (r[i] as f64);
                 active_n += 2;
             }

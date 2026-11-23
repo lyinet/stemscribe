@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { Layers, X } from "lucide-react";
+import { Layers, Plus, X } from "lucide-react";
 import type { ImportStemSpec } from "../types/music";
 
 interface Props {
   paths: string[];
   /** inferred role per path: lead/backing/drums/perc/bass/other/mix */
   roles: string[];
+  /** re-open the file picker to append more files; returns new paths + roles */
+  onPickMore: () => Promise<{ paths: string[]; roles: string[] } | null>;
   onConfirm: (stems: ImportStemSpec[], mixPath: string | null) => void;
   onCancel: () => void;
 }
@@ -22,14 +24,41 @@ const ROLE_OPTIONS: Array<{ v: string; label: string }> = [
 
 const fileName = (p: string) => p.split("/").pop() ?? p;
 
+interface Row {
+  path: string;
+  role: string;
+}
+
 export const ImportStemsModal: React.FC<Props> = ({
   paths,
   roles,
+  onPickMore,
   onConfirm,
   onCancel,
 }) => {
-  const [sel, setSel] = useState<string[]>(roles);
-  const stemCount = sel.filter((r) => r !== "mix").length;
+  const [rows, setRows] = useState<Row[]>(
+    paths.map((p, i) => ({ path: p, role: roles[i] ?? "other" }))
+  );
+  const [adding, setAdding] = useState(false);
+  const stemCount = rows.filter((r) => r.role !== "mix").length;
+
+  const addMore = async () => {
+    setAdding(true);
+    try {
+      const picked = await onPickMore();
+      if (picked && picked.paths.length > 0) {
+        setRows((prev) => {
+          const seen = new Set(prev.map((r) => r.path));
+          const extra = picked.paths
+            .map((p, i) => ({ path: p, role: picked.roles[i] ?? "other" }))
+            .filter((r) => !seen.has(r.path));
+          return [...prev, ...extra];
+        });
+      }
+    } finally {
+      setAdding(false);
+    }
+  };
 
   return (
     <div
@@ -58,13 +87,13 @@ export const ImportStemsModal: React.FC<Props> = ({
           </button>
         </div>
         <p style={{ fontSize: 12, color: "var(--text-3)", margin: "4px 0 10px" }}>
-          已按文件名猜测每轨的角色，可在下方修改；标记为「混音（原曲）」的文件将作为修复对照原曲，
-          没有提供混音时会自动把所有分轨相加作为原曲。
+          可一次多选（⌘/⇧-click）或点「继续添加」；已按文件名猜测每轨的角色，可在下方修改。
+          标记为「混音（原曲）」的文件将作为修复对照原曲，没有提供混音时会自动把所有分轨相加作为原曲。
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {paths.map((p, i) => (
+          {rows.map((r, i) => (
             <div
-              key={p}
+              key={r.path}
               className="row"
               style={{ justifyContent: "space-between", gap: 8 }}
             >
@@ -76,14 +105,16 @@ export const ImportStemsModal: React.FC<Props> = ({
                   whiteSpace: "nowrap",
                   flex: 1,
                 }}
-                title={p}
+                title={r.path}
               >
-                {fileName(p)}
+                {fileName(r.path)}
               </span>
               <select
-                value={sel[i]}
+                value={r.role}
                 onChange={(e) =>
-                  setSel((prev) => prev.map((r, j) => (j === i ? e.target.value : r)))
+                  setRows((prev) =>
+                    prev.map((x, j) => (j === i ? { ...x, role: e.target.value } : x))
+                  )
                 }
                 style={{ minWidth: 110 }}
               >
@@ -93,30 +124,41 @@ export const ImportStemsModal: React.FC<Props> = ({
                   </option>
                 ))}
               </select>
+              <button
+                className="btn btn-sm"
+                title="移除该文件"
+                onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
+              >
+                <X size={12} />
+              </button>
             </div>
           ))}
         </div>
         <div
           className="row"
-          style={{ justifyContent: "flex-end", gap: 8, marginTop: 14 }}
+          style={{ justifyContent: "space-between", gap: 8, marginTop: 14 }}
         >
-          <button className="btn" onClick={onCancel}>
-            取消
+          <button className="btn btn-sm" onClick={addMore} disabled={adding}>
+            <Plus size={13} /> {adding ? "选择中…" : "继续添加"}
           </button>
-          <button
-            className="btn btn-primary"
-            disabled={stemCount === 0}
-            onClick={() => {
-              const mixPath =
-                paths.find((_, i) => sel[i] === "mix") ?? null;
-              const stems = paths
-                .map((p, i) => ({ file_path: p, role: sel[i] }))
-                .filter((s) => s.role !== "mix");
-              onConfirm(stems, mixPath);
-            }}
-          >
-            导入 {stemCount} 条分轨
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn" onClick={onCancel}>
+              取消
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={stemCount === 0}
+              onClick={() => {
+                const mixPath = rows.find((r) => r.role === "mix")?.path ?? null;
+                const stems = rows
+                  .filter((r) => r.role !== "mix")
+                  .map((r) => ({ file_path: r.path, role: r.role }));
+                onConfirm(stems, mixPath);
+              }}
+            >
+              导入 {stemCount} 条分轨
+            </button>
+          </div>
         </div>
       </div>
     </div>

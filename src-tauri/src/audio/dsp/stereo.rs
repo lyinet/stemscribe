@@ -29,10 +29,11 @@ pub fn widen_band(
 /// Collapse everything below `fc` to mono (LR4 split, keep high intact).
 pub fn mono_below(l: &[f32], r: &[f32], sr: f64, fc: f64) -> (Vec<f32>, Vec<f32>) {
     let n = l.len().min(r.len());
-    let mut xo_l = Lr4::new(sr, fc);
-    let mut xo_r = Lr4::new(sr, fc);
-    let (lo_l, hi_l) = xo_l.split(&l[..n]);
-    let (lo_r, hi_r) = xo_r.split(&r[..n]);
+    let ((lo_l, hi_l), (lo_r, hi_r)) = std::thread::scope(|sc| {
+        let hl = sc.spawn(|| Lr4::new(sr, fc).split(&l[..n]));
+        let hr = sc.spawn(|| Lr4::new(sr, fc).split(&r[..n]));
+        (hl.join().unwrap(), hr.join().unwrap())
+    });
     let mut out_l = Vec::with_capacity(n);
     let mut out_r = Vec::with_capacity(n);
     for i in 0..n {

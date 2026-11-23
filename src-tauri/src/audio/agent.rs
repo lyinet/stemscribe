@@ -182,9 +182,17 @@ fn agent_out_path(source: &str, round: usize) -> String {
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("audio");
-    dir.join(format!("{stem}_agent_r{round}_{}.wav", std::process::id()))
-        .to_string_lossy()
-        .to_string()
+    // Same-named sources in different folders (and parallel agent runs)
+    // must not share render files.
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(source, &mut h);
+    let src_hash = std::hash::Hasher::finish(&h) as u32;
+    dir.join(format!(
+        "{stem}_agent_r{round}_{}_{src_hash:08x}.wav",
+        std::process::id()
+    ))
+    .to_string_lossy()
+    .to_string()
 }
 
 fn result_from_baseline(
@@ -215,6 +223,7 @@ fn result_from_baseline(
         }),
         critic: None,
         critic_before: None,
+        guard_rung: None,
     }
 }
 
@@ -307,10 +316,17 @@ where
                     });
                 }
             };
-            let mut notes = ctx2.notes.clone();
-            let (l, r, gr) =
-                restore::render_lra_guarded(&ctx2, &rreq, &mut stage_emit, &mut notes)?;
-            restore::finish_render(&ctx2, &rreq, l, r, gr, notes, &mut stage_emit, t0, true)
+            let pq_in = || input_pq;
+            restore::render_with_pq_guard(
+                &ctx2,
+                &rreq,
+                &mut stage_emit,
+                ctx2.notes.clone(),
+                t0,
+                &pq_in,
+                &restore::critic_score_opt,
+                true,
+            )
         })
     };
 

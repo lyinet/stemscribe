@@ -50,6 +50,9 @@ fn print_result(result: &stemscribe_lib::audio::restore::RestoreResult, sep_s: f
     if let (Some(a), Some(b)) = (&result.critic_before, &result.critic) {
         println!("critic PQ: {:.2} -> {:.2}", a.pq, b.pq);
     }
+    if let Some(r) = &result.guard_rung {
+        println!("guard_rung: {r}");
+    }
     if let Some(r) = &result.reference {
         println!(
             "reference distance: {:.2} -> {:.2} dB ({})",
@@ -265,15 +268,23 @@ fn main() {
 
     // --- restore ---
     let fname_base = Path::new(&input).file_name().unwrap().to_string_lossy().to_string();
-    let tag = if ref_path.is_some() {
+    let tag_override = opt("--tag");
+    let tag = if let Some(t) = &tag_override {
+        t.clone()
+    } else if ref_path.is_some() {
         format!("{strength_tag}_ref")
     } else if drums_amount.is_some() {
         format!("{strength_tag}_drums")
     } else {
         strength_tag.clone()
     };
+    let out_name = if tag_override.is_some() {
+        format!("{tag}.wav")
+    } else {
+        format!("{fname_base}.restored_{tag}.wav")
+    };
     let out_path = Path::new(&out_dir)
-        .join(format!("{fname_base}.restored_{tag}.wav"))
+        .join(out_name)
         .to_string_lossy()
         .to_string();
     let req = RestoreRequest {
@@ -304,6 +315,25 @@ fn main() {
                         "low_shelf_db" => s.low_shelf_db = v,
                         "high_shelf_db" => s.high_shelf_db = v,
                         other => panic!("unknown tone param {other}"),
+                    }
+                }
+                // --module name=amount (repeatable): the 8 f32 module fields
+                // + loudness=0|1
+                if a == "--module" {
+                    let kv = args.get(i + 1).expect("--module needs name=amount");
+                    let (k, v) = kv.split_once('=').expect("--module needs name=amount");
+                    let v: f32 = v.parse().expect("--module amount must be a number");
+                    match k {
+                        "vocal_cleanup" => s.modules.vocal_cleanup = v,
+                        "shimmer" => s.modules.shimmer = v,
+                        "drum_punch" => s.modules.drum_punch = v,
+                        "low_end" => s.modules.low_end = v,
+                        "width" => s.modules.width = v,
+                        "vocal_space" => s.modules.vocal_space = v,
+                        "hf_restore" => s.modules.hf_restore = v,
+                        "glue" => s.modules.glue = v,
+                        "loudness" => s.modules.loudness = v != 0.0,
+                        other => panic!("unknown module {other}"),
                     }
                 }
             }

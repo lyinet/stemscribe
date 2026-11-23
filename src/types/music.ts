@@ -493,6 +493,8 @@ export interface RestoreResult {
   objective?: ObjectiveScore | null;
   critic?: CriticScore | null;
   critic_before?: CriticScore | null;
+  /** Which PQ-guard rung produced the output: "full" | "half" | "minimal". */
+  guard_rung?: string | null;
 }
 
 export interface ObjectiveTerm {

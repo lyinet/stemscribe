@@ -643,6 +643,11 @@ export async function separateStems(
   return invoke<StemOutput[]>("separate_stems", { filePath, outputDir: null, quality });
 }
 
+export async function checkFilesExist(paths: string[]): Promise<boolean[]> {
+  if (!isTauriRuntime()) return paths.map(() => true);
+  return invoke<boolean[]>("check_files_exist", { paths });
+}
+
 export async function transcribeStemToMidi(
   stemPath: string,
   stemName: string

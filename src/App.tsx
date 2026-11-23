@@ -109,6 +109,7 @@ import {
   pickMusicXmlSavePath,
   pickWavSavePath,
   refineMidiWithLlm,
+  checkFilesExist,
   reharmonizeChordsLocal,
   restoreAgent,
   restoreAudio,
@@ -842,8 +843,22 @@ export const App: React.FC = () => {
   const handleLoadProject = useCallback(async (projectId: string, preferredCapo?: number) => {
     try {
       const p = await loadProjectFile(projectId);
+      // Stems may point at a shared temp dir that a later separation
+      // overwrote — drop missing or duration-mismatched stem files.
+      let projectStems = p.stems;
+      let stemsStale = false;
+      if (p.stems.length > 0) {
+        const exists = await checkFilesExist(p.stems.map((s) => s.file_path));
+        stemsStale = p.stems.some(
+          (s, i) =>
+            !exists[i] ||
+            !Number.isFinite(s.duration_sec) ||
+            Math.abs(s.duration_sec - p.audio_meta.duration_sec) > 0.5
+        );
+        if (stemsStale) projectStems = [];
+      }
       setAudioMeta(p.audio_meta);
-      setStems(p.stems);
+      setStems(projectStems);
       setChords(p.chords);
       setOriginalChordsBackup(null);
       setActiveReharmStyle(null);
@@ -882,10 +897,12 @@ export const App: React.FC = () => {
       setShowProjectsMenu(false);
       setIsPlaying(false);
       setCurrentTime(0);
-      if (p.stems.length > 0) {
-        engineRef.current?.loadStems(p.stems, (t) => setCurrentTime(t));
+      if (projectStems.length > 0) {
+        engineRef.current?.loadStems(projectStems, (t) => setCurrentTime(t));
       }
-      setStatusMsg(`已恢复工程：${p.name}`);
+      setStatusMsg(
+        `已恢复工程：${p.name}${stemsStale ? "；分轨文件已失效，请重新分轨" : ""}`
+      );
     } catch (err) {
       setStatusMsg(`加载工程失败: ${String(err)}`);
     }
@@ -1811,12 +1828,17 @@ export const App: React.FC = () => {
     }
   };
 
+  const pickStemFiles = async () => {
+    const paths = await pickAudioFilesMultiple();
+    if (paths.length === 0) return null;
+    const roles = await guessStemRoles(paths);
+    return { paths, roles };
+  };
+
   const handleImportStems = async () => {
     try {
-      const paths = await pickAudioFilesMultiple();
-      if (paths.length === 0) return;
-      const roles = await guessStemRoles(paths);
-      setImportStemsDraft({ paths, roles });
+      const picked = await pickStemFiles();
+      if (picked) setImportStemsDraft(picked);
     } catch (err) {
       setStatusMsg(`选择分轨失败: ${String(err)}`);
     }
@@ -2873,6 +2895,7 @@ export const App: React.FC = () => {
         <ImportStemsModal
           paths={importStemsDraft.paths}
           roles={importStemsDraft.roles}
+          onPickMore={pickStemFiles}
           onConfirm={confirmImportStems}
           onCancel={() => setImportStemsDraft(null)}
         />

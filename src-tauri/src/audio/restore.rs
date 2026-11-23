@@ -4,8 +4,8 @@
 
 use super::dsp::biquad::{butter4_highpass, Biquad};
 use super::dsp::dynamics::{Compressor, DynamicEqBand};
-use super::dsp::exciter::exciter_band;
 use super::dsp::limiter::limit_stereo;
+use super::dsp::exciter::exciter_band;
 use super::dsp::saturation::Saturator;
 use super::dsp::spectral::SpectralSuppressor;
 use super::dsp::stereo::{mono_below, widen_band};
@@ -324,6 +324,9 @@ pub struct RestoreResult {
     /// Audiobox Aesthetics score of the input (None when model absent).
     #[serde(default)]
     pub critic_before: Option<super::quality::critic::CriticScore>,
+    /// Which PQ-guard rung produced this output: "full" | "half" | "minimal".
+    #[serde(default)]
+    pub guard_rung: Option<String>,
 }
 
 // ---------- helpers ----------
@@ -427,6 +430,12 @@ fn apply_vocal_tone(l: &mut Vec<f32>, r: &mut Vec<f32>, rs: &RestoreSettings) {
 
 const STEM_SR: f64 = 44_100.0;
 
+/// Test/ablation-only kill switches: SS_NO_VOCAL_SUPPRESS, SS_NO_VOCAL_DEESS,
+/// SS_NO_OTHER_SUPPRESS, SS_NO_HARSH_DYN, SS_NO_HARSH_STATIC (=1 disables).
+fn stage_off(name: &str) -> bool {
+    matches!(std::env::var(name).ok().as_deref(), Some("1") | Some("true"))
+}
+
 fn chain_vocals(
     l: &[f32],
     r: &[f32],
@@ -445,15 +454,18 @@ fn chain_vocals(
     let mut l = bl.process(l);
     let mut r = br.process(r);
     // Spectral cleanup 2.5-9 kHz
-    {
-        let mut sup_l = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 4.0, 0.6 * s, 6.0 * s, 5.0, 60.0);
-        let mut sup_r = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 4.0, 0.6 * s, 6.0 * s, 5.0, 60.0);
+    if !stage_off("SS_NO_VOCAL_SUPPRESS") {
+        let mut sup_l = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 6.0, 0.4 * s, 4.0 * s, 5.0, 60.0);
+        let mut sup_r = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 6.0, 0.4 * s, 4.0 * s, 5.0, 60.0);
         l = sup_l.process(&l);
         r = sup_r.process(&r);
     }
-    // De-esser (linked, detector = own 5-11 kHz band)
-    {
-        let thr = detector_percentile(&l, &r, STEM_SR, (5000.0, 11000.0), 60.0, 0.85);
+    // De-esser (linked, detector = own 5-11 kHz band). Threshold =
+    // max(p85, p50 + 6 dB) so it only engages on genuine sibilance
+    // spikes instead of always acting on the top 15 % of the song.
+    if !stage_off("SS_NO_VOCAL_DEESS") {
+        let thr = detector_percentile(&l, &r, STEM_SR, (5000.0, 11000.0), 60.0, 0.85)
+            .max(detector_percentile(&l, &r, STEM_SR, (5000.0, 11000.0), 60.0, 0.50) + 6.0);
         let mut de = DynamicEqBand::new(STEM_SR, 7500.0, 0.8, (5000.0, 11000.0), thr, 4.0, 6.0 * s, 1.0, 60.0);
         let (a, b) = de.process(&l, &r, None);
         l = a;
@@ -558,10 +570,10 @@ fn chain_other(
         l = a;
         r = b;
     }
-    if m.vocal_cleanup > 0.0 {
+    if m.vocal_cleanup > 0.0 && !stage_off("SS_NO_OTHER_SUPPRESS") {
         let vc = s * m.vocal_cleanup as f64;
-        let mut a = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 4.0, 0.5 * vc, 5.0 * vc, 5.0, 60.0);
-        let mut b = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 4.0, 0.5 * vc, 5.0 * vc, 5.0, 60.0);
+        let mut a = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 6.0, 0.35 * vc, 3.0 * vc, 5.0, 60.0);
+        let mut b = SpectralSuppressor::new(STEM_SR, 2500.0, 9000.0, 6.0, 0.35 * vc, 3.0 * vc, 5.0, 60.0);
         l = a.process(&l);
         r = b.process(&r);
     }
@@ -618,6 +630,35 @@ fn chain_other(
 
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
+/// Env-gated (SS_TIMING=1) per-stage wall-clock probe for perf audits.
+pub(crate) fn timing_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("SS_TIMING").is_some())
+}
+
+/// Logs `<name>: <secs>` on drop when SS_TIMING is set.
+pub(crate) struct StageTimer {
+    name: String,
+    t: Instant,
+}
+
+impl StageTimer {
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        StageTimer {
+            name: name.into(),
+            t: Instant::now(),
+        }
+    }
+}
+
+impl Drop for StageTimer {
+    fn drop(&mut self) {
+        if timing_enabled() {
+            eprintln!("[timing] {} {:.2}s", self.name, self.t.elapsed().as_secs_f64());
+        }
+    }
+}
+
 fn master_bus(
     y_l: &[f32],
     y_r: &[f32],
@@ -649,6 +690,7 @@ fn master_bus(
     }
     // HPF 28 Hz, 4th-order Butterworth (fixed cleanup)
     {
+        let _t = StageTimer::new("mb_hpf");
         let mut hl = butter4_highpass(work_sr, 28.0);
         let mut hr = butter4_highpass(work_sr, 28.0);
         l = hl.iter_mut().fold(l, |x, b| b.process(&x));
@@ -662,7 +704,8 @@ fn master_bus(
         r = b;
     }
     // Master-bus dynamic EQ per diagnosed harsh peak (<= 4).
-    if m.vocal_cleanup > 0.0 {
+    if m.vocal_cleanup > 0.0 && !stage_off("SS_NO_HARSH_DYN") {
+        let _t = StageTimer::new("mb_harsh_dyn");
         for pk in diag.harsh_peaks.iter().take(4) {
             let hz = pk.hz as f64;
             let lo = hz * 2f64.powf(-1.0 / 8.0);
@@ -688,6 +731,7 @@ fn master_bus(
     // code path as diagnose.rs) and correct any residual. Spec allows one
     // extra iteration, so the measure->correct pass may repeat once more.
     for _pass in 0..2 {
+        let _t = StageTimer::new(format!("mb_closed_loop_{_pass}"));
         let mut applied = false;
         let n = l.len().min(r.len());
         let mid: Vec<f32> = (0..n).map(|i| (l[i] + r[i]) * 0.5).collect();
@@ -710,7 +754,7 @@ fn master_bus(
                 }
             }
         }
-        if m.vocal_cleanup > 0.0 {
+        if m.vocal_cleanup > 0.0 && !stage_off("SS_NO_HARSH_STATIC") {
             for pk in peaks.iter().take(4) {
                 if pk.excess_db >= 2.5 {
                     // The peak band also feeds the 1-octave reference mean,
@@ -764,6 +808,7 @@ fn master_bus(
         r = br.process(&r);
     }
     if m.glue > 0.0 {
+        let _t = StageTimer::new("mb_glue");
         // Glue compressor: level-relative threshold = 3 s slow RMS envelope
         // + 2 dB — shapes micro-dynamics without flattening sections.
         let gl = s * m.glue as f64;
@@ -789,8 +834,11 @@ fn master_bus(
                 let hf = s * m.hf_restore as f64;
                 let rel = if hf <= 1.0 { -10.0 + 8.0 * (hf - 0.5) } else { -6.0 + 6.0 * (hf - 1.0) };
                 let n = l.len();
-                let add_l = exciter_band(&l, work_sr as u32, fc, rel);
-                let add_r = exciter_band(&r, work_sr as u32, fc, rel);
+                let (add_l, add_r) = std::thread::scope(|sc| {
+                    let hl = sc.spawn(|| exciter_band(&l, work_sr as u32, fc, rel));
+                    let hr = sc.spawn(|| exciter_band(&r, work_sr as u32, fc, rel));
+                    (hl.join().unwrap(), hr.join().unwrap())
+                });
                 for i in 0..n {
                     l[i] += add_l[i];
                     r[i] += add_r[i];
@@ -809,7 +857,40 @@ fn master_bus(
 /// `emit(stage, percent)`.
 pub fn run_restore(
     req: &RestoreRequest,
-    mut emit: impl FnMut(&str, f32),
+    emit: impl FnMut(&str, f32) + Send,
+) -> Result<RestoreResult> {
+    run_restore_inner(req, emit, &critic_score_opt)
+}
+
+/// Lazily-joined critic score of one path: the scorer runs on a scoped
+/// thread so it overlaps other work; the result is fetched once.
+fn lazy_score<'a>(
+    scope: &'a std::thread::Scope<'a, '_>,
+    critic: CriticFn<'a>,
+    path: &'a str,
+) -> impl Fn() -> Option<super::quality::critic::CriticScore> + 'a {
+    let handle = std::sync::Mutex::new(Some(scope.spawn(move || {
+        let _t = StageTimer::new("critic_in");
+        critic(path)
+    })));
+    let cell = std::sync::OnceLock::new();
+    move || {
+        cell.get_or_init(|| {
+            handle
+                .lock()
+                .unwrap()
+                .take()
+                .map(|h| h.join().ok().flatten())
+                .unwrap_or(None)
+        })
+        .clone()
+    }
+}
+
+pub(crate) fn run_restore_inner(
+    req: &RestoreRequest,
+    mut emit: impl FnMut(&str, f32) + Send,
+    critic: CriticFn<'_>,
 ) -> Result<RestoreResult> {
     let t0 = Instant::now();
     let mut owned;
@@ -818,14 +899,26 @@ pub fn run_restore(
         owned.settings = owned.settings.clamped();
         &owned
     };
-    let ctx = prepare_restore(req, &mut emit, false)?;
-    let mut notes = ctx.notes.clone();
-    let (y_l, y_r, limiter_avg_gr) =
-        render_lra_guarded(&ctx, req, &mut emit, &mut notes)?;
-    let mut res =
-        finish_render(&ctx, req, y_l, y_r, limiter_avg_gr, notes, &mut emit, t0, true)?;
-    res.critic_before = critic_score_opt(&req.source_path);
-    Ok(res)
+    // cache_stems=true: decode each stem once instead of twice.
+    let ctx = prepare_restore(req, &mut emit, true)?;
+    std::thread::scope(|scope| {
+        // The input PQ is only needed after the F render finishes —
+        // score it concurrently with that render.
+        let get_in = lazy_score(scope, critic, &req.source_path);
+        let pq_in = || get_in().map(|c| c.pq as f64);
+        let mut res = render_with_pq_guard(
+            &ctx,
+            req,
+            &mut emit,
+            ctx.notes.clone(),
+            t0,
+            &pq_in,
+            critic,
+            true,
+        )?;
+        res.critic_before = get_in();
+        Ok(res)
+    })
 }
 
 /// Everything decoded/analyzed once for one or more renders of the same
@@ -850,16 +943,19 @@ const STEM_CACHE_MAX_BYTES: usize = 512 * 1024 * 1024;
 
 pub(crate) fn prepare_restore(
     req: &RestoreRequest,
-    emit: &mut dyn FnMut(&str, f32),
+    emit: &mut (dyn FnMut(&str, f32) + Send),
     cache_stems: bool,
 ) -> Result<RestoreCtx> {
     let m = &req.settings.modules;
     let mut notes: Vec<String> = Vec::new();
 
     emit("analyze", 0.0);
+    let _t = StageTimer::new("analyze_input");
     let before = analyze_quality(&req.source_path)?;
+    drop(_t);
 
     // Decode source at full quality -> stereo at work rate.
+    let _t = StageTimer::new("decode_source");
     let decoded = decode_audio_file(&req.source_path)?;
     let (xl, xr) = decoded.to_stereo_planar();
     let work_rate = if decoded.sample_rate >= 44_100 {
@@ -910,6 +1006,7 @@ pub(crate) fn prepare_restore(
         if cache_stems && stem_mode { Some(Vec::new()) } else { None };
     let mut pcm_bytes = 0usize;
     if stem_mode {
+        let _t = StageTimer::new("prepare_stem_pass");
         for st in &req.stems {
             let d = decode_audio_file(&st.file_path)
                 .map_err(|e| anyhow!("读取分轨 {} 失败: {e}", st.file_path))?;
@@ -973,8 +1070,10 @@ fn render_stems(
     ctx: &RestoreCtx,
     req: &RestoreRequest,
     dyn_scale: f64,
-    emit: &mut dyn FnMut(&str, f32),
+    emit: &mut (dyn FnMut(&str, f32) + Send),
+    parallel_stems: bool,
 ) -> Result<(Vec<f32>, Vec<f32>, f64, Vec<String>)> {
+    let _t_all = StageTimer::new("render_stems_total");
     let s = req.settings.strength as f64;
     let m = &req.settings.modules;
     let n = ctx.n;
@@ -993,29 +1092,51 @@ fn render_stems(
     let mut d44_l: Vec<f32> = Vec::new();
     let mut d44_r: Vec<f32> = Vec::new();
     if ctx.stem_mode {
-        // Lead-vocal stems first: `other` ducking needs the summed raw lead
-        // vocal as sidechain reference no matter the input order.
-        let mut order: Vec<usize> = (0..req.stems.len()).collect();
-        order.sort_by_key(|&i| usize::from(stem_role(&req.stems[i]) != StemRole::Lead));
+        let n_stems = req.stems.len();
+        // Resolve every stem's 44.1k PCM once: from the prepare cache when
+        // available, otherwise decode+resample all stems in parallel.
+        let owned: Vec<(Vec<f32>, Vec<f32>)>;
+        let pcm: &[(Vec<f32>, Vec<f32>)] = match &ctx.stem_pcm {
+            Some(v) => v.as_slice(),
+            None => {
+                let _t = StageTimer::new("stem_decode");
+                owned = std::thread::scope(|scope| -> Result<Vec<_>> {
+                    let hs: Vec<_> = req
+                        .stems
+                        .iter()
+                        .map(|st| {
+                            scope.spawn(move || {
+                                let d = decode_audio_file(&st.file_path)
+                                    .map_err(|e| {
+                                        anyhow!(
+                                            "读取分轨 {} 失败: {e}",
+                                            st.file_path
+                                        )
+                                    })?;
+                                let sr_in = d.sample_rate;
+                                let (sl, sr_) = d.to_stereo_planar();
+                                drop(d);
+                                Ok(resample_hq_stereo(&sl, &sr_, sr_in, 44_100))
+                            })
+                        })
+                        .collect();
+                    hs.into_iter()
+                        .map(|h| {
+                            h.join()
+                                .map_err(|_| anyhow!("分轨解码线程异常终止"))
+                                .and_then(|r| r)
+                        })
+                        .collect()
+                })?;
+                &owned
+            }
+        };
+        // Sidechain for `other` ducking = summed unprocessed lead-vocal
+        // stems (independent of the processed chain output).
         let mut lead_sum: Option<(Vec<f32>, Vec<f32>)> = None;
-        for (seq, &idx) in order.iter().enumerate() {
-            let st = &req.stems[idx];
-            let owned: (Vec<f32>, Vec<f32>);
-            let (sl44, sr44): (&[f32], &[f32]) =
-                if let Some(pcm) = ctx.stem_pcm.as_ref().and_then(|v| v.get(idx)) {
-                    (pcm.0.as_slice(), pcm.1.as_slice())
-                } else {
-                    let d = decode_audio_file(&st.file_path)
-                        .map_err(|e| anyhow!("读取分轨 {} 失败: {e}", st.file_path))?;
-                    let sr_in = d.sample_rate;
-                    let (sl, sr_) = d.to_stereo_planar();
-                    drop(d);
-                    owned = resample_hq_stereo(&sl, &sr_, sr_in, 44_100);
-                    (owned.0.as_slice(), owned.1.as_slice())
-                };
-            let role = stem_role(st);
-            if matches!(role, StemRole::Lead) {
-                // Sidechain = summed unprocessed lead-vocal stems.
+        for (i, st) in req.stems.iter().enumerate() {
+            if matches!(stem_role(st), StemRole::Lead) {
+                let (sl44, sr44) = (pcm[i].0.as_slice(), pcm[i].1.as_slice());
                 match &mut lead_sum {
                     Some((a, b)) => {
                         let len = a.len().min(sl44.len());
@@ -1027,10 +1148,20 @@ fn render_stems(
                     None => lead_sum = Some((sl44.to_vec(), sr44.to_vec())),
                 }
             }
-            let vref = lead_sum
+        }
+        let lead_ref = &lead_sum;
+        // One chain per stem -> (processed L, R, notes). Chains are
+        // independent pure DSP, so they parallelize; `other` only reads
+        // the raw lead sidechain computed above.
+        let process = |idx: usize| -> (Vec<f32>, Vec<f32>, Vec<String>) {
+            let st = &req.stems[idx];
+            let _t = StageTimer::new(format!("chain_{:?}", stem_role(st)));
+            let (sl44, sr44) = (pcm[idx].0.as_slice(), pcm[idx].1.as_slice());
+            let mut n: Vec<String> = Vec::new();
+            let vref = lead_ref
                 .as_ref()
                 .map(|(a, b)| (a.as_slice(), b.as_slice()));
-            let (pl, pr) = match role {
+            let (pl, pr) = match stem_role(st) {
                 StemRole::Lead => {
                     let (mut pl, mut pr) =
                         chain_vocals(sl44, sr44, s, m, dyn_scale, true);
@@ -1054,7 +1185,7 @@ fn render_stems(
                                 &hits, sl44, sr44, 44_100.0,
                             );
                             if g.disabled {
-                                rnotes.push(
+                                n.push(
                                     "鼓点不够规整，已跳过鼓替换".to_string()
                                 );
                             } else {
@@ -1079,13 +1210,13 @@ fn render_stems(
                                     pl[i] += amount * rbuf[i];
                                     pr[i] += amount * rbuf[i];
                                 }
-                                rnotes.push(format!(
+                                n.push(format!(
                                     "叠加真实鼓：底鼓 {nk}/{}、军鼓 {ns}/{}",
                                     g.raw[0], g.raw[1]
                                 ));
                             }
                         } else {
-                            rnotes.push(
+                            n.push(
                                 "鼓替换已开启但鼓件加载失败，已跳过".to_string()
                             );
                         }
@@ -1096,9 +1227,58 @@ fn render_stems(
                 StemRole::Perc => chain_drums(sl44, sr44, s, m, &ctx.before),
                 StemRole::Bass => chain_bass(sl44, sr44, s, m, dyn_scale),
                 StemRole::Other => {
-                    chain_other(sl44, sr44, s, m, &ctx.before, vref, ctx.vocals_weak, &mut rnotes)
+                    chain_other(sl44, sr44, s, m, &ctx.before, vref, ctx.vocals_weak, &mut n)
                 }
             };
+            (pl, pr, n)
+        };
+        let results: Vec<(Vec<f32>, Vec<f32>, Vec<String>)> = if parallel_stems
+        {
+            let emit_m = std::sync::Mutex::new(&mut *emit);
+            let done = std::sync::atomic::AtomicUsize::new(0);
+            std::thread::scope(|scope| {
+                let process = &process;
+                let done = &done;
+                let emit_m = &emit_m;
+                let hs: Vec<_> = (0..n_stems)
+                    .map(|i| {
+                        scope.spawn(move || {
+                            let r = process(i);
+                            let c = done
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                                + 1;
+                            if let Ok(mut e) = emit_m.lock() {
+                                e(
+                                    "stems",
+                                    5.0 + 35.0 * c as f32 / n_stems.max(1) as f32,
+                                );
+                            }
+                            r
+                        })
+                    })
+                    .collect();
+                hs.into_iter()
+                    .map(|h| h.join().expect("分轨处理线程异常终止"))
+                    .collect()
+            })
+        } else {
+            (0..n_stems)
+                .enumerate()
+                .map(|(seq, i)| {
+                    let r = process(i);
+                    emit(
+                        "stems",
+                        5.0 + 35.0 * (seq + 1) as f32 / n_stems.max(1) as f32,
+                    );
+                    r
+                })
+                .collect()
+        };
+        // Sum deltas in stem-index order so the output is identical no
+        // matter the completion order.
+        for (i, (pl, pr, n2)) in results.into_iter().enumerate() {
+            rnotes.extend(n2);
+            let (sl44, sr44) = (pcm[i].0.as_slice(), pcm[i].1.as_slice());
             let len = sl44.len().min(sr44.len());
             if d44_l.len() < len {
                 d44_l.resize(len, 0.0);
@@ -1108,12 +1288,7 @@ fn render_stems(
                 d44_l[i] += pl[i] - sl44[i];
                 d44_r[i] += pr[i] - sr44[i];
             }
-            emit(
-                "stems",
-                5.0 + 35.0 * (seq + 1) as f32 / req.stems.len().max(1) as f32,
-            );
         }
-        drop(lead_sum);
     }
     emit("stems", 45.0);
 
@@ -1121,7 +1296,10 @@ fn render_stems(
     let (dw_l, dw_r) = if d44_l.is_empty() {
         (Vec::new(), Vec::new())
     } else {
-        resample_hq_stereo(&d44_l, &d44_r, 44_100, work_rate)
+        {
+            let _t = StageTimer::new("delta_resample");
+            resample_hq_stereo(&d44_l, &d44_r, 44_100, work_rate)
+        }
     };
     drop((d44_l, d44_r));
     let mut y_l = ctx.xw_l[..n].to_vec();
@@ -1134,6 +1312,7 @@ fn render_stems(
     emit("master", 50.0);
 
     // `yb` = master-bus output, pre-limiter.
+    let _t_master = StageTimer::new("master_bus");
     let (yb_l, yb_r) = master_bus(
         &y_l,
         &y_r,
@@ -1153,8 +1332,10 @@ fn render_stems(
         (req.settings.match_amount as f64 * s).min(1.0),
     );
     drop((y_l, y_r));
+    drop(_t_master);
 
     // --- Loudness matching + limiter ---
+    let _t_limit = StageTimer::new("loudness_limit");
     emit("limit", 75.0);
     // follow_reference_loudness overrides the user target.
     let target_lufs = if req.settings.follow_reference_loudness {
@@ -1178,7 +1359,9 @@ fn render_stems(
     };
     let (y_l, y_r, limiter_avg_gr);
     if m.loudness {
+        let _t = StageTimer::new("lufs_pre");
         let i_pre = loudness::integrated_lufs(&[yb_l.clone(), yb_r.clone()], work_rate);
+        drop(_t);
         let mut pre_gain_db = if i_pre.is_finite() {
             (target_lufs - i_pre).min(12.0)
         } else {
@@ -1188,12 +1371,13 @@ fn render_stems(
         let mut ol = yb_l.clone();
         let mut or_ = yb_r.clone();
         for _iter in 0..3 {
+            let _t = StageTimer::new(format!("limit_iter_{_iter}"));
             let (a, b, st) = limit_once(pre_gain_db, &yb_l, &yb_r);
             let i_post = loudness::integrated_lufs(&[a.clone(), b.clone()], work_rate);
             ol = a;
             or_ = b;
             last_gr = st.avg_gr_db;
-            if !i_post.is_finite() || (target_lufs - i_post).abs() <= 0.2 {
+            if !i_post.is_finite() || (target_lufs - i_post).abs() <= 0.02 {
                 break;
             }
             pre_gain_db = (pre_gain_db + target_lufs - i_post).min(12.0);
@@ -1204,7 +1388,9 @@ fn render_stems(
         if last_gr > 3.0 {
             // Predict the GR-vs-gain curve on one 4x peak profile (cheap),
             // pick the highest gain at predicted ~2.9 dB, verify for real.
+            let _t = StageTimer::new("peak_profile_4x");
             let profile = super::dsp::limiter::peak_profile_4x(&yb_l, &yb_r);
+            drop(_t);
             let mut lo = pre_gain_db - 20.0;
             let mut hi = pre_gain_db;
             for _ in 0..24 {
@@ -1252,14 +1438,18 @@ fn render_stems(
 pub(crate) fn render_lra_guarded(
     ctx: &RestoreCtx,
     req: &RestoreRequest,
-    emit: &mut dyn FnMut(&str, f32),
+    emit: &mut (dyn FnMut(&str, f32) + Send),
     notes: &mut Vec<String>,
+    parallel_stems: bool,
 ) -> Result<(Vec<f32>, Vec<f32>, f64)> {
     let mut dyn_scale = 1.0f64;
     let mut attempts = 0usize;
     loop {
-        let (a, b, gr, rnotes) = render_stems(ctx, req, dyn_scale, emit)?;
+        let (a, b, gr, rnotes) =
+            render_stems(ctx, req, dyn_scale, emit, parallel_stems)?;
+        let _t = StageTimer::new("lra_measure");
         let lra_out = loudness::loudness_range_lu(&[a.clone(), b.clone()], ctx.work_rate);
+        drop(_t);
         if attempts < 2
             && ctx.before.lra_lu.is_finite()
             && lra_out.is_finite()
@@ -1287,9 +1477,9 @@ pub(crate) fn finish_render(
     y_r: Vec<f32>,
     limiter_avg_gr: f64,
     mut notes: Vec<String>,
-    emit: &mut dyn FnMut(&str, f32),
+    emit: &mut (dyn FnMut(&str, f32) + Send),
     t0: Instant,
-    score_critic: bool,
+    critic: CriticFn<'_>,
 ) -> Result<RestoreResult> {
     emit("write", 92.0);
     let out_path = match &req.output_path {
@@ -1309,13 +1499,26 @@ pub(crate) fn finish_render(
         }
     };
     let bit_depth = if req.settings.bit_depth == 16 { 16 } else { 24 };
+    let _t = StageTimer::new("write_wav");
     if bit_depth == 24 {
         write_stereo_wav_i24(Path::new(&out_path), &y_l, &y_r, ctx.work_rate)?;
     } else {
         write_stereo_wav_i16_tpdf(Path::new(&out_path), &y_l, &y_r, ctx.work_rate)?;
     }
+    drop(_t);
     emit("report", 97.0);
-    let after = analyze_quality(&out_path)?;
+    // Output critic runs concurrently with the report analysis — both
+    // only need the written file.
+    let (after, critic) = std::thread::scope(|scope| {
+        let critic = scope.spawn(|| {
+            let _t = StageTimer::new("critic_out");
+            critic(&out_path)
+        });
+        let _t = StageTimer::new("analyze_output");
+        (analyze_quality(&out_path), critic.join().ok().flatten())
+    });
+    let after = after?;
+    let critic = critic;
     let loudness_match = if ctx.before.integrated_lufs.is_finite() && after.integrated_lufs.is_finite() {
         ctx.before.integrated_lufs - after.integrated_lufs
     } else {
@@ -1352,11 +1555,7 @@ pub(crate) fn finish_render(
         effective_target,
         req.settings.ceiling_dbtp,
     ));
-    let critic = if score_critic {
-        critic_score_opt(&out_path)
-    } else {
-        None
-    };
+
     Ok(RestoreResult {
         output_path: out_path,
         sample_rate: ctx.work_rate,
@@ -1371,6 +1570,7 @@ pub(crate) fn finish_render(
         objective,
         critic,
         critic_before: None,
+        guard_rung: None,
     })
 }
 
@@ -1380,6 +1580,137 @@ pub(crate) fn critic_score_opt(path: &str) -> Option<super::quality::critic::Cri
         Ok(p) if p.exists() => super::quality::critic::score_audio(path).ok(),
         _ => None,
     }
+}
+
+/// Critic scorer injected into the render path so tests can fake the
+/// model without global state.
+type CriticFn<'a> = &'a (dyn Fn(&str) -> Option<super::quality::critic::CriticScore> + Sync);
+
+/// PQ drop vs input that triggers a lighter guard rung.
+const PQ_GUARD_TOLERANCE: f64 = 0.10;
+
+/// The request for a PQ-guard rung. rung 0 = the request as given;
+/// rung 1 ("half") halves the perceptually risky modules; rung 2
+/// ("minimal") disables all eight module amounts plus the optional
+/// bool/tone processors, leaving only loudness + true-peak handling.
+fn ladder_request(req: &RestoreRequest, rung: usize) -> RestoreRequest {
+    let mut r = req.clone();
+    match rung {
+        1 => {
+            let m = &mut r.settings.modules;
+            m.vocal_cleanup *= 0.5;
+            m.shimmer *= 0.5;
+            m.glue *= 0.5;
+            m.vocal_space *= 0.5;
+        }
+        _ => {
+            let m = &mut r.settings.modules;
+            m.vocal_cleanup = 0.0;
+            m.shimmer = 0.0;
+            m.drum_punch = 0.0;
+            m.low_end = 0.0;
+            m.width = 0.0;
+            m.vocal_space = 0.0;
+            m.hf_restore = 0.0;
+            m.glue = 0.0;
+            m.loudness = true;
+            m.reference_match = false;
+            m.drum_replace = false;
+            r.settings.vocal_level_db = 0.0;
+            r.settings.vocal_presence_db = 0.0;
+            r.settings.vocal_air_db = 0.0;
+            r.settings.low_shelf_db = 0.0;
+            r.settings.high_shelf_db = 0.0;
+        }
+    }
+    r
+}
+
+const RUNG_NAMES: [&str; 3] = ["full", "half", "minimal"];
+
+/// Render + analyze one candidate, guarded by the critic: when the output
+/// drops PQ by more than 0.10 vs the input, walk a ladder of lighter
+/// settings (F full → H half → M minimal) and keep the most-processed
+/// rung that stays within tolerance; if none does, keep the highest-PQ
+/// candidate. Without the critic the requested render is returned as-is.
+/// Compare/agent apply their own acceptance rules on top.
+pub(crate) fn render_with_pq_guard(
+    ctx: &RestoreCtx,
+    req: &RestoreRequest,
+    emit: &mut (dyn FnMut(&str, f32) + Send),
+    mut notes: Vec<String>,
+    t0: Instant,
+    pq_in: &dyn Fn() -> Option<f64>,
+    critic: CriticFn<'_>,
+    parallel_stems: bool,
+) -> Result<RestoreResult> {
+    let (y_l, y_r, gr) =
+        render_lra_guarded(ctx, req, emit, &mut notes, parallel_stems)?;
+    let res = finish_render(ctx, req, y_l, y_r, gr, notes, emit, t0, critic)?;
+    // Resolved after the F render, so an overlapped input-critic thread
+    // has long finished.
+    let Some(pq_in) = pq_in() else {
+        return Ok(res);
+    };
+    let pq_of = |r: &RestoreResult| {
+        r.critic
+            .as_ref()
+            .map(|c| c.pq as f64)
+            .unwrap_or(f64::NEG_INFINITY)
+    };
+    let out_final = res.output_path.clone();
+    let mut cands: Vec<(usize, RestoreResult)> = vec![(0, res)];
+    if pq_of(&cands[0].1) < pq_in - PQ_GUARD_TOLERANCE {
+        for rung in [1usize, 2usize] {
+            let mut rreq = ladder_request(req, rung);
+            rreq.output_path = Some(format!("{out_final}.pq{rung}.wav"));
+            let mut n = ctx.notes.clone();
+            let (a, b, g) =
+                render_lra_guarded(ctx, &rreq, emit, &mut n, parallel_stems)?;
+            let r = finish_render(ctx, &rreq, a, b, g, n, emit, t0, critic)?;
+            let qualifies = pq_of(&r) >= pq_in - PQ_GUARD_TOLERANCE;
+            cands.push((rung, r));
+            if qualifies {
+                break;
+            }
+        }
+    }
+    // Lowest rung within tolerance wins; otherwise the highest PQ.
+    let pick = cands
+        .iter()
+        .position(|(_, r)| pq_of(r) >= pq_in - PQ_GUARD_TOLERANCE)
+        .unwrap_or_else(|| {
+            cands
+                .iter()
+                .enumerate()
+                .max_by(|a, b| pq_of(&a.1 .1).partial_cmp(&pq_of(&b.1 .1)).unwrap())
+                .map(|(i, _)| i)
+                .unwrap_or(0)
+        });
+    let mut winner = None;
+    for (i, (rung, mut r)) in cands.into_iter().enumerate() {
+        if i == pick {
+            r.guard_rung = Some(RUNG_NAMES[rung].to_string());
+            match rung {
+                1 => r
+                    .notes
+                    .push("AI 评分提示处理过度，已减轻处理".to_string()),
+                2 => r.notes.push(
+                    "这首歌原本质量不错，进一步处理反而扣分，只做了响度与峰值".to_string(),
+                ),
+                _ => {}
+            }
+            if r.output_path != out_final {
+                let _ = std::fs::remove_file(&out_final);
+                std::fs::rename(&r.output_path, &out_final)?;
+                r.output_path = out_final.clone();
+            }
+            winner = Some(r);
+        } else if rung > 0 {
+            let _ = std::fs::remove_file(&r.output_path);
+        }
+    }
+    Ok(winner.expect("at least the full rung exists"))
 }
 
 /// One candidate of the three-strength comparison.
@@ -1423,8 +1754,14 @@ pub fn run_restore_compare(
         owned.settings = owned.settings.clamped();
         &owned
     };
-    let ctx = prepare_restore(req, &mut emit, true)?;
-    let critic_before = critic_score_opt(&req.source_path);
+    // Score the input concurrently with decode+analysis; only needed
+    // once candidates start finishing.
+    let critic_before = std::thread::scope(|scope| {
+        let get_in = lazy_score(scope, &critic_score_opt, &req.source_path);
+        let ctx = prepare_restore(req, &mut emit, true)?;
+        Ok::<_, anyhow::Error>((ctx, get_in()))
+    }).map(|(c, b)| (c, b));
+    let (ctx, critic_before) = critic_before?;
     let stem_name = Path::new(&req.source_path)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -1449,6 +1786,7 @@ pub fn run_restore_compare(
                 let emit_m = &emit_m;
                 let ctx = &ctx;
                 let stem_name = &stem_name;
+                let critic_before = &critic_before;
                 scope.spawn(move || -> Result<RestoreResult> {
                     let mut creq = req.clone();
                     creq.settings.strength = *strength;
@@ -1470,10 +1808,17 @@ pub fn run_restore_compare(
                             (*e)(stage, mean);
                         }
                     };
-                    let mut notes = ctx.notes.clone();
-                    let (y_l, y_r, gr) =
-                        render_lra_guarded(ctx, &creq, &mut scaled, &mut notes)?;
-                    finish_render(ctx, &creq, y_l, y_r, gr, notes, &mut scaled, t0, true)
+                    let pq_in = || critic_before.as_ref().map(|c| c.pq as f64);
+                    render_with_pq_guard(
+                        ctx,
+                        &creq,
+                        &mut scaled,
+                        ctx.notes.clone(),
+                        t0,
+                        &pq_in,
+                        &critic_score_opt,
+                        false,
+                    )
                 })
             })
             .collect();
@@ -1606,6 +1951,12 @@ pub fn write_stereo_wav_i16_tpdf(
 
 #[cfg(test)]
 mod tests {
+    /// Tests must never consult the real critic model (installed on dev
+    /// machines) — the PQ guard would re-route synthetic renders.
+    fn no_critic(_: &str) -> Option<crate::audio::quality::critic::CriticScore> {
+        None
+    }
+
     use super::*;
     use crate::audio::write_stereo_wav_f32;
 
@@ -1650,7 +2001,7 @@ mod tests {
             settings,
             output_path: Some(out.to_string_lossy().to_string()),
         };
-        let res = run_restore(&req, |_, _| {}).unwrap();
+        let res = run_restore_inner(&req, |_, _| {}, &no_critic).unwrap();
         let d = decode_audio_file(&res.output_path).unwrap();
         let (ol, or_) = d.to_stereo_planar();
         let d0 = decode_audio_file(&src.to_string_lossy().to_string()).unwrap();
@@ -1665,6 +2016,81 @@ mod tests {
         }
         let err_db = 10.0 * (e / x_e.max(1e-30)).log10();
         assert!(err_db <= -120.0, "null error {err_db:.1} dB");
+    }
+
+    /// PQ-guard ladder with a fake critic: staged scores per rung output
+    /// file (.wav = full, .pq1. = half, .pq2. = minimal).
+    #[test]
+    fn pq_guard_ladder_picks_lightest_qualifying_rung() {
+        use crate::audio::quality::critic::CriticScore;
+        let dir = std::env::temp_dir().join(format!("stemscribe_ladder_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("src.wav");
+        write_test_wav(&src, 1.0, 44100);
+        let mk_req = |name: &str| RestoreRequest {
+            source_path: src.to_string_lossy().to_string(),
+            stems: vec![],
+            settings: RestoreSettings::default(),
+            output_path: Some(dir.join(name).to_string_lossy().to_string()),
+        };
+        let run = |name: &str, f: f64, h: f64, m: f64| {
+            let critic = move |p: &str| {
+                let pq = if p.contains(".pq2.") {
+                    m
+                } else if p.contains(".pq1.") {
+                    h
+                } else {
+                    f
+                };
+                Some(CriticScore {
+                    ce: 0.0,
+                    cu: 0.0,
+                    pc: 0.0,
+                    pq: pq as f32,
+                    duration_sec: 0.0,
+                    windows: vec![],
+                })
+            };
+            let req = mk_req(name);
+            let mut em = |_: &str, _: f32| {};
+            let ctx = prepare_restore(&req, &mut em, false).unwrap();
+            render_with_pq_guard(
+                &ctx,
+                &req,
+                &mut em,
+                ctx.notes.clone(),
+                Instant::now(),
+                &|| Some(7.0),
+                &critic,
+                false,
+            )
+            .unwrap()
+        };
+
+        // F fails, H fails, M passes -> minimal.
+        let r = run("a.wav", 5.0, 5.5, 6.95);
+        assert_eq!(r.guard_rung.as_deref(), Some("minimal"));
+        assert!(r.notes.iter().any(|n| n.contains("只做了响度与峰值")));
+        assert_eq!(r.output_path, dir.join("a.wav").to_string_lossy());
+        assert!(!dir.join("a.wav.pq1.wav").exists(), "loser files deleted");
+        assert!(!dir.join("a.wav.pq2.wav").exists());
+
+        // F fails, H passes -> half, M never rendered.
+        let r = run("b.wav", 5.0, 6.95, 9.0);
+        assert_eq!(r.guard_rung.as_deref(), Some("half"));
+        assert!(r.notes.iter().any(|n| n.contains("已减轻处理")));
+        assert_eq!(r.output_path, dir.join("b.wav").to_string_lossy());
+        assert!(!dir.join("b.wav.pq2.wav").exists());
+
+        // None qualifies -> highest PQ (H).
+        let r = run("c.wav", 4.0, 4.5, 4.2);
+        assert_eq!(r.guard_rung.as_deref(), Some("half"));
+        assert_eq!(r.output_path, dir.join("c.wav").to_string_lossy());
+
+        // F within tolerance -> full, nothing else rendered.
+        let r = run("d.wav", 6.95, 9.0, 9.0);
+        assert_eq!(r.guard_rung.as_deref(), Some("full"));
+        assert!(!dir.join("d.wav.pq1.wav").exists());
     }
 
     #[test]
@@ -1761,7 +2187,7 @@ mod tests {
             settings,
             output_path: Some(out.to_string_lossy().to_string()),
         };
-        let res = run_restore(&req, |_, _| {}).unwrap();
+        let res = run_restore_inner(&req, |_, _| {}, &no_critic).unwrap();
         let d = decode_audio_file(&res.output_path).unwrap();
         let (ol, or_) = d.to_stereo_planar();
         assert_eq!(ol.len(), n, "output length must equal source length");
@@ -1817,7 +2243,7 @@ mod tests {
             settings,
             output_path: Some(out.to_string_lossy().to_string()),
         };
-        let res = run_restore(&req, |_, _| {}).unwrap();
+        let res = run_restore_inner(&req, |_, _| {}, &no_critic).unwrap();
         let ri = res.reference.expect("reference info missing");
         assert!(
             ri.distance_after_db < ri.distance_before_db,
@@ -1887,7 +2313,8 @@ mod tests {
             },
             output_path: Some(outp.to_string_lossy().to_string()),
         };
-        let res = run_restore(&mk_req(true, &out), |_, _| {}).unwrap();
+        // No critic in tests: the PQ guard must not re-route this render.
+        let res = run_restore_inner(&mk_req(true, &out), |_, _| {}, &no_critic).unwrap();
         assert!(
             res.notes.iter().any(|n| n.contains("叠加真实鼓")),
             "hit-count note missing: {:?}",
@@ -1901,7 +2328,7 @@ mod tests {
         assert_eq!(xcorr_lag(&r, &or_, c, 24000), 0, "restore lag R (drums)");
         // Module off: identical output to a run without the module.
         let off_out = dir.join("drumlag_off.wav");
-        let res_off = run_restore(&mk_req(false, &off_out), |_, _| {}).unwrap();
+        let res_off = run_restore_inner(&mk_req(false, &off_out), |_, _| {}, &no_critic).unwrap();
         assert!(
             !res_off.notes.iter().any(|n| n.contains("叠加真实鼓")),
             "off run must not render reinforcement"
@@ -1984,13 +2411,13 @@ mod tests {
             },
             output_path: Some(out.to_string_lossy().to_string()),
         };
-        let a = run_restore(&mk(true, &dir.join("vs_on.wav")), |_, _| {}).unwrap();
+        let a = run_restore_inner(&mk(true, &dir.join("vs_on.wav")), |_, _| {}, &no_critic).unwrap();
         assert!(
             !a.notes.iter().any(|n| n.contains("人声过弱")),
             "vocal_space must not be skipped: {:?}",
             a.notes
         );
-        let b = run_restore(&mk(false, &dir.join("vs_off.wav")), |_, _| {}).unwrap();
+        let b = run_restore_inner(&mk(false, &dir.join("vs_off.wav")), |_, _| {}, &no_critic).unwrap();
         let da = decode_audio_file(&a.output_path).unwrap();
         let db = decode_audio_file(&b.output_path).unwrap();
         let (al, _) = da.to_stereo_planar();
@@ -2057,7 +2484,7 @@ mod tests {
             settings,
             output_path: Some(out.to_string_lossy().to_string()),
         };
-        let res = run_restore(&req, |_, _| {}).unwrap();
+        let res = run_restore_inner(&req, |_, _| {}, &no_critic).unwrap();
         assert!(res.objective.is_some(), "objective score must be set");
         let d = decode_audio_file(&res.output_path).unwrap();
         let (ol, or_) = d.to_stereo_planar();
@@ -2127,7 +2554,7 @@ mod tests {
             settings,
             output_path: Some(out.to_string_lossy().to_string()),
         };
-        let res = run_restore(&req, |_, _| {}).unwrap();
+        let res = run_restore_inner(&req, |_, _| {}, &no_critic).unwrap();
         let d = decode_audio_file(&res.output_path).unwrap();
         let (ol, _or_) = d.to_stereo_planar();
         assert_eq!(ol.len(), n);
@@ -2279,7 +2706,7 @@ mod tests {
             settings,
             output_path: Some(out.to_string_lossy().to_string()),
         };
-        let res = run_restore(&req, |_, _| {}).unwrap();
+        let res = run_restore_inner(&req, |_, _| {}, &no_critic).unwrap();
         assert!(
             res.notes.iter().any(|n| n.contains("纯母带模式")),
             "mix-only note missing: {:?}",

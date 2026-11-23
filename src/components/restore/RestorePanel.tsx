@@ -597,7 +597,11 @@ export const RestorePanel: React.FC<Props> = ({
                 before: result.critic_before
                   ? result.critic_before.pq.toFixed(2)
                   : "—",
-                after: result.critic.pq.toFixed(2),
+                after:
+                  result.critic.pq.toFixed(2) +
+                  (result.guard_rung && result.guard_rung !== "full"
+                    ? `（${result.guard_rung === "half" ? "半档" : "仅响度/峰值"}）`
+                    : ""),
               },
             ]
           : []),

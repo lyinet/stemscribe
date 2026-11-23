@@ -4,6 +4,7 @@
 
 use realfft::{num_complex::Complex, RealFftPlanner};
 
+#[derive(Clone)]
 pub struct SpectralSuppressor {
     sr: f64,
     f_lo: f64,
@@ -50,6 +51,10 @@ impl SpectralSuppressor {
 
     /// Mono convenience: stereo callers run one instance per channel.
     pub fn process(&mut self, x: &[f32]) -> Vec<f32> {
+        let _t = crate::audio::restore::StageTimer::new(format!(
+            "suppressor_{:.0}-{:.0}Hz",
+            self.f_lo, self.f_hi
+        ));
         let n = x.len();
         let pad = N / 2;
         let len = n + N; // padded on both sides
@@ -80,10 +85,19 @@ impl SpectralSuppressor {
         };
         let atk_c = (-(HOP as f64) / (self.attack_ms.max(0.1) * self.sr / 1000.0)).exp();
         let rel_c = (-(HOP as f64) / (self.release_ms.max(1.0) * self.sr / 1000.0)).exp();
+        // Detection spectrum = 300 ms EMA over per-frame magnitudes, so
+        // pitch-varying harmonics average out and only persistent
+        // resonances stand above the 1/3-octave envelope.
+        let avg_c = (-(HOP as f64) / (300.0 * self.sr / 1000.0)).exp();
 
         let mut out_acc = vec![0.0f64; padded.len()];
         let mut norm_acc = vec![0.0f64; padded.len()];
         let mut cut_prev = vec![0.0f64; bins];
+        let mut mags_avg = vec![f64::NAN; bins];
+        let mut mags = vec![0.0f64; bins];
+        let mut cut = vec![0.0f64; bins];
+        let mut gain_db = vec![0.0f64; bins];
+        let mut prefix = vec![0.0f64; bins];
 
         let mut frame_in = fft.make_input_vec();
         let mut spec = fft.make_output_vec();
@@ -99,30 +113,37 @@ impl SpectralSuppressor {
             if fft.process(&mut frame_in, &mut spec).is_err() {
                 continue;
             }
-            // magnitude dB per bin
-            for b in 0..bins {
-                let _ = b;
-            }
-            // compute cut per bin
-            let mut mags = vec![0.0f64; bins];
+            // magnitude dB per bin (reused buffers — per-frame allocs
+            // dominated the runtime on long files)
+            mags.fill(0.0);
             for b in lo_bin..=hi_bin {
                 let c = spec[b];
                 let m = (c.re * c.re + c.im * c.im).sqrt();
                 mags[b] = 20.0 * m.max(1e-12).log10();
             }
-            let mut cut = vec![0.0f64; bins];
+            for b in lo_bin..=hi_bin {
+                mags_avg[b] = if mags_avg[b].is_nan() {
+                    mags[b]
+                } else {
+                    avg_c * mags_avg[b] + (1.0 - avg_c) * mags[b]
+                };
+            }
+            // Prefix sums give each bin's 1/3-oct envelope in O(1) instead
+            // of an inner loop over the window.
+            let mut acc = 0.0f64;
+            for b in lo_bin..=hi_bin {
+                acc += mags_avg[b];
+                prefix[b] = acc;
+            }
+            cut.fill(0.0);
             for b in lo_bin..=hi_bin {
                 let (a, z) = smooth_bins(b);
-                let mut s = 0.0;
-                let mut c = 0;
-                for k in a..=z {
-                    if k >= lo_bin && k <= hi_bin {
-                        s += mags[k];
-                        c += 1;
-                    }
-                }
-                let env = if c > 0 { s / c as f64 } else { mags[b] };
-                let excess = mags[b] - env - self.threshold_db;
+                let a = a.max(lo_bin);
+                let z = z.min(hi_bin);
+                let c = z - a + 1;
+                let s = prefix[z] - if a > lo_bin { prefix[a - 1] } else { 0.0 };
+                let env = s / c as f64;
+                let excess = mags_avg[b] - env - self.threshold_db;
                 if excess > 0.0 {
                     cut[b] = (self.depth * excess).min(self.max_cut_db);
                 }
@@ -132,16 +153,26 @@ impl SpectralSuppressor {
                 let c = if cut[b] > cut_prev[b] { atk_c } else { rel_c };
                 cut_prev[b] = c * cut_prev[b] + (1.0 - c) * cut[b];
             }
-            // frequency smoothing ±2 bins
-            let mut gain_db = vec![0.0f64; bins];
-            for b in lo_bin..=hi_bin {
-                let mut s = 0.0;
-                let mut c = 0;
-                for k in b.saturating_sub(2)..=(b + 2).min(hi_bin) {
-                    s += cut_prev[k];
+            // frequency smoothing ±2 bins (running window)
+            gain_db.fill(0.0);
+            {
+                let mut s = 0.0f64;
+                let mut c = 0usize;
+                for b in lo_bin..=(hi_bin.min(lo_bin + 2)) {
+                    s += cut_prev[b];
                     c += 1;
                 }
-                gain_db[b] = s / c as f64;
+                for b in lo_bin..=hi_bin {
+                    gain_db[b] = s / c as f64;
+                    if b + 3 <= hi_bin {
+                        s += cut_prev[b + 3];
+                        c += 1;
+                    }
+                    if b + 1 >= lo_bin + 3 {
+                        s -= cut_prev[b - 2];
+                        c -= 1;
+                    }
+                }
             }
             // apply
             for b in 0..bins {
@@ -166,9 +197,14 @@ impl SpectralSuppressor {
     }
 
     pub fn process_stereo(&mut self, l: &[f32], r: &[f32]) -> (Vec<f32>, Vec<f32>) {
-        let ll = self.process(l);
-        let rr = self.process(r);
-        (ll, rr)
+        // The suppressor is stateless across calls — run the channels on
+        // two clones in parallel.
+        let mut other = self.clone();
+        std::thread::scope(|sc| {
+            let hl = sc.spawn(|| self.process(l));
+            let hr = sc.spawn(|| other.process(r));
+            (hl.join().unwrap(), hr.join().unwrap())
+        })
     }
 }
 

@@ -52,6 +52,40 @@ pub fn run_separation(
     output_dir: Option<String>,
     high_quality: bool,
 ) -> Result<Vec<StemOutput>> {
+    // Stems for a given source live in a per-song dir under app data (not
+    // the shared temp dir), which doubles as the separation cache: a
+    // completed run leaves stems.json + the four wavs.
+    let auto_dir = output_dir.is_none();
+    let out_dir = match output_dir {
+        Some(d) => PathBuf::from(d),
+        None => crate::ml::stems_dir_for(file_path)?,
+    };
+    let sidecar = out_dir.join("stems.json");
+    if auto_dir && sidecar.is_file() {
+        if let Ok(text) = std::fs::read_to_string(&sidecar) {
+            if let Ok(cached) = serde_json::from_str::<serde_json::Value>(&text) {
+                let flag_ok = cached
+                    .get("high_quality")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                    == high_quality;
+                if flag_ok {
+                    if let Ok(stems) =
+                        serde_json::from_value::<Vec<StemOutput>>(cached["stems"].clone())
+                    {
+                        if stems.len() == 4
+                            && stems
+                                .iter()
+                                .all(|s| std::path::Path::new(&s.file_path).is_file())
+                        {
+                            return Ok(stems);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let model_path = demucs_model_path()?;
     if !model_path.exists() {
         return Err(anyhow!(
@@ -98,10 +132,6 @@ pub fn run_separation(
         stem_right[IDX_VOCALS] = ft_right[IDX_VOCALS].clone();
     }
 
-    let out_dir = match output_dir {
-        Some(d) => PathBuf::from(d),
-        None => std::env::temp_dir().join("stemscribe_stems"),
-    };
     std::fs::create_dir_all(&out_dir)?;
 
     let mut results = Vec::with_capacity(4);
@@ -130,6 +160,17 @@ pub fn run_separation(
                 _ => "other".to_string(),
             }),
         });
+    }
+
+    if auto_dir {
+        let sidecar_json = serde_json::json!({
+            "source": file_path,
+            "high_quality": high_quality,
+            "stems": results,
+        });
+        if let Ok(text) = serde_json::to_string(&sidecar_json) {
+            let _ = std::fs::write(&sidecar, text);
+        }
     }
 
     Ok(results)

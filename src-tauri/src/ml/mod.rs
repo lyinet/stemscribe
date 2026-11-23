@@ -26,6 +26,27 @@ pub fn models_dir() -> Result<PathBuf> {
     Ok(dir)
 }
 
+/// Per-song stems directory: `StemScribe/stems/<hash(path|size|mtime)>/`.
+/// Stable for an unchanged file, so a completed separation there doubles
+/// as a cache (see `run_separation`).
+pub fn stems_dir_for(source_path: &str) -> Result<PathBuf> {
+    let p = std::path::Path::new(source_path);
+    let md = std::fs::metadata(p)
+        .with_context(|| format!("无法读取源文件 {source_path}"))?;
+    let mtime = md
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let key = format!("{source_path}|{}|{mtime}", md.len());
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(&key, &mut h);
+    let digest = format!("{:016x}", std::hash::Hasher::finish(&h));
+    let base = dirs::data_dir().context("Cannot locate macOS Application Support directory")?;
+    Ok(base.join("StemScribe").join("stems").join(digest))
+}
+
 pub fn demucs_model_path() -> Result<PathBuf> {
     Ok(models_dir()?.join("htdemucs.onnx"))
 }
@@ -83,4 +104,32 @@ fn build_session(model_path: &PathBuf, use_coreml: bool) -> Result<Session> {
         .commit_from_file(model_path)
         .with_context(|| format!("Failed to load ONNX model at {}", model_path.display()))?;
     Ok(session)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stems_dir_for;
+    use std::io::Write;
+
+    #[test]
+    fn stems_dir_stable_and_source_specific() {
+        let dir = std::env::temp_dir().join(format!("ss_stemsdir_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("song_a.wav");
+        let b = dir.join("song_b.wav");
+        std::fs::File::create(&a).unwrap().write_all(b"aaaa").unwrap();
+        std::fs::File::create(&b).unwrap().write_all(b"bbbb").unwrap();
+
+        let da1 = stems_dir_for(a.to_str().unwrap()).unwrap();
+        let da2 = stems_dir_for(a.to_str().unwrap()).unwrap();
+        let db = stems_dir_for(b.to_str().unwrap()).unwrap();
+        assert_eq!(da1, da2, "same file -> same stems dir");
+        assert_ne!(da1, db, "different files -> different stems dirs");
+        assert!(da1.ends_with("stems") || da1.parent().unwrap().ends_with("stems"));
+
+        // mtime/body change -> new dir (no silent reuse of stale stems)
+        std::fs::File::create(&a).unwrap().write_all(b"aaaa-changed").unwrap();
+        let da3 = stems_dir_for(a.to_str().unwrap()).unwrap();
+        assert_ne!(da1, da3);
+    }
 }

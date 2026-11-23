@@ -40,7 +40,14 @@ impl Saturator {
     }
 
     pub fn process_stereo(&mut self, l: &[f32], r: &[f32]) -> (Vec<f32>, Vec<f32>) {
-        (self.process(l), self.process(r))
+        // Channels are independent — run them on two threads. The
+        // saturator is stateless so each side gets a fresh instance.
+        let (drive, mix) = (self.drive, self.mix);
+        std::thread::scope(|sc| {
+            let hl = sc.spawn(|| Saturator::new(drive, mix).process(l));
+            let hr = sc.spawn(|| Saturator::new(drive, mix).process(r));
+            (hl.join().unwrap(), hr.join().unwrap())
+        })
     }
 }
 

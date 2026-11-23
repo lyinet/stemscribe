@@ -419,6 +419,14 @@ async fn separate_stems(
 }
 
 #[tauri::command]
+fn check_files_exist(paths: Vec<String>) -> Vec<bool> {
+    paths
+        .iter()
+        .map(|p| std::path::Path::new(p).is_file())
+        .collect()
+}
+
+#[tauri::command]
 async fn transcribe_stem_to_midi(
     stem_path: String,
     stem_name: String,
@@ -736,6 +744,7 @@ pub fn run() {
             import_onnx_model,
             delete_onnx_model,
             separate_stems,
+            check_files_exist,
             transcribe_stem_to_midi,
             import_midi_file,
             export_midi_file,

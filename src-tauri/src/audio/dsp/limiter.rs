@@ -319,35 +319,30 @@ pub fn limit_stereo(
             },
         );
     }
-    let mut scale = 1.0f64;
-    let mut stats = (0.0f64, 0.0f64);
-    let mut out_l = l[..n].to_vec();
-    let mut out_r = r[..n].to_vec();
-    // First pass + up to 3 corrective passes on scaled input when the
-    // decimation FIR leaves residual inter-sample overshoot.
-    for pass in 0..4 {
-        let (a, b, avg, mx) = limit_pass_blocks(l, r, sr * 4.0, ceil, scale);
-        if pass == 0 {
-            stats = (avg, mx);
-        }
-        let tp_lin = 10f64.powf(
-            crate::audio::quality::loudness::true_peak_dbtp(&[a.clone(), b.clone()], sr as u32)
-                / 20.0,
-        );
+    // One limiting pass + a scalar trim for residual inter-sample
+    // overshoot left by the decimation FIR. With the small GR this
+    // limiter produces, re-rendering the pass at a corrected scale is
+    // indistinguishable from trimming the output, and the outer loudness
+    // loop re-converges to the target anyway.
+    let stats;
+    let mut out_l;
+    let mut out_r;
+    {
+        let _t = crate::audio::restore::StageTimer::new("limit_pass_0");
+        let (a, b, avg, mx) = limit_pass_blocks(l, r, sr * 4.0, ceil, 1.0);
+        stats = (avg, mx);
         out_l = a;
         out_r = b;
-        if tp_lin <= ceil {
-            break;
-        }
-        scale *= ceil / tp_lin;
     }
-    // Final safety net: scale the output if overshoot persists.
-    let tp_final = 10f64.powf(
-        crate::audio::quality::loudness::true_peak_dbtp(&[out_l.clone(), out_r.clone()], sr as u32)
-            / 20.0,
-    );
-    if tp_final > ceil {
-        let corr = (ceil / tp_final) as f32;
+    let tp_lin = {
+        let _t = crate::audio::restore::StageTimer::new("limit_tp_check");
+        10f64.powf(
+            crate::audio::quality::loudness::true_peak_dbtp(&[out_l.clone(), out_r.clone()], sr as u32)
+                / 20.0,
+        )
+    };
+    if tp_lin > ceil {
+        let corr = (ceil / tp_lin) as f32;
         for v in &mut out_l {
             *v *= corr;
         }
