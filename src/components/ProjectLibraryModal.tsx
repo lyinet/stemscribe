@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Check, Edit3, FolderOpen, Search, Trash2, X } from "lucide-react";
+import { t } from "../i18n";
 import type { ProjectSummary } from "../types/music";
 
 interface Props {
@@ -61,7 +62,7 @@ export const ProjectLibraryModal: React.FC<Props> = ({
       >
         <div className="card-header">
           <div className="card-title">
-            <FolderOpen size={15} /> 本地扒带工程库（共 {projects.length} 个工程）
+            <FolderOpen size={15} /> {t("projects.title", { count: projects.length })}
           </div>
           <button className="btn btn-sm" onClick={onClose}>
             <X size={14} />
@@ -72,7 +73,7 @@ export const ProjectLibraryModal: React.FC<Props> = ({
           <Search size={14} color="var(--muted)" />
           <input
             className="input"
-            placeholder="按歌名或日期筛选已保存的 StemScribe 工程..."
+            placeholder={t("projects.filter")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -83,8 +84,8 @@ export const ProjectLibraryModal: React.FC<Props> = ({
           {filtered.length === 0 ? (
             <div className="muted" style={{ textAlign: "center", padding: 28 }}>
               {projects.length === 0
-                ? "还没有已保存的本地工程。处理音频后按 Cmd+S 即可保存。"
-                : "没有匹配该关键词的工程。"}
+                ? t("projects.empty")
+                : t("projects.noMatch")}
             </div>
           ) : (
             filtered.map((p) => {
@@ -115,7 +116,7 @@ export const ProjectLibraryModal: React.FC<Props> = ({
                           autoFocus
                         />
                         <button className="btn btn-sm btn-primary" onClick={() => commitRename(p.id)}>
-                          <Check size={12} /> 确定
+                          <Check size={12} /> {t("common.confirm")}
                         </button>
                       </div>
                     ) : (
@@ -132,7 +133,7 @@ export const ProjectLibraryModal: React.FC<Props> = ({
                           {p.name}
                         </div>
                         <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
-                          {p.note_count} 个音符 · 更新于 {p.updated_at}
+                          {t("projects.meta", { count: p.note_count, updated: p.updated_at })}
                         </div>
                       </>
                     )}
@@ -147,7 +148,7 @@ export const ProjectLibraryModal: React.FC<Props> = ({
                           onClose();
                         }}
                       >
-                        打开
+                        {t("common.open")}
                       </button>
                       <button
                         className="btn btn-sm"
@@ -155,14 +156,14 @@ export const ProjectLibraryModal: React.FC<Props> = ({
                           setEditingId(p.id);
                           setDraftName(p.name);
                         }}
-                        title="重命名工程"
+                        title={t("projects.renameTip")}
                       >
                         <Edit3 size={12} />
                       </button>
                       <button
                         className="btn btn-sm"
                         onClick={() => onDeleteProject(p.id)}
-                        title="删除工程文件"
+                        title={t("projects.deleteTip")}
                       >
                         <Trash2 size={12} />
                       </button>

@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
+import { t } from "../../i18n";
 import { RotateCcw } from "lucide-react";
 import type { MasterEqState, ReverbPreset } from "../../lib/audioEngine";
 
 export type MixPresetId = "original" | "karaoke" | "no_drums" | "bass_focus" | "vocals_only";
 
 const MIX_PRESETS: Array<{ id: MixPresetId; label: string; hint: string }> = [
-  { id: "original", label: "原曲", hint: "所有音轨均衡播放" },
-  { id: "karaoke", label: "伴奏 (消人声)", hint: "静音人声，用来跟唱" },
-  { id: "no_drums", label: "去掉鼓", hint: "静音鼓组，用来跟打" },
-  { id: "bass_focus", label: "突出贝斯", hint: "贝斯独奏，用来扒贝斯" },
-  { id: "vocals_only", label: "只听人声", hint: "人声独奏" },
+  { id: "original", label: t("mixer.p.original"), hint: t("mixer.p.original.hint") },
+  { id: "karaoke", label: t("mixer.p.karaoke"), hint: t("mixer.p.karaoke.hint") },
+  { id: "no_drums", label: t("mixer.p.noDrums"), hint: t("mixer.p.noDrums.hint") },
+  { id: "bass_focus", label: t("mixer.p.bass"), hint: t("mixer.p.bass.hint") },
+  { id: "vocals_only", label: t("mixer.p.vocals"), hint: t("mixer.p.vocals.hint") },
 ];
 
 interface Props {
@@ -79,7 +80,7 @@ function EqKnob({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         onDoubleClick={() => onChange(0)}
-        title="双击归零"
+        title={t("mixer.resetTip")}
       />
       <span className="eq-label">{label}</span>
     </div>
@@ -117,8 +118,8 @@ export const MixerPanel: React.FC<Props> = ({
   return (
     <div className="mixer">
       <section className="mixer-section">
-        <h4>练习场景</h4>
-        <p className="mixer-hint">{hasStems ? "一键切换各音轨的静音 / 独奏组合" : "先完成 AI 分轨后可用"}</p>
+        <h4>{t("mixer.scenes")}</h4>
+        <p className="mixer-hint">{hasStems ? t("mixer.scenesHint") : t("mixer.scenesHintNo")}</p>
         <div className="preset-grid">
           {MIX_PRESETS.map((p) => (
             <button
@@ -136,26 +137,26 @@ export const MixerPanel: React.FC<Props> = ({
 
       <section className="mixer-section">
         <h4>
-          总线均衡 EQ
-          <button className="icon-btn" onClick={() => onEqChange({ lowDb: 0, midDb: 0, highDb: 0 })} title="全部归零">
+          {t("mixer.eq")}
+          <button className="icon-btn" onClick={() => onEqChange({ lowDb: 0, midDb: 0, highDb: 0 })} title={t("mixer.eqResetTip")}>
             <RotateCcw size={12} />
           </button>
         </h4>
         <div className="eq-row">
-          <EqKnob label="低频" value={eq.lowDb} onChange={(v) => onEqChange({ ...eq, lowDb: v })} />
-          <EqKnob label="中频" value={eq.midDb} onChange={(v) => onEqChange({ ...eq, midDb: v })} />
-          <EqKnob label="高频" value={eq.highDb} onChange={(v) => onEqChange({ ...eq, highDb: v })} />
+          <EqKnob label={t("mixer.eqLow")} value={eq.lowDb} onChange={(v) => onEqChange({ ...eq, lowDb: v })} />
+          <EqKnob label={t("mixer.eqMid")} value={eq.midDb} onChange={(v) => onEqChange({ ...eq, midDb: v })} />
+          <EqKnob label={t("mixer.eqHigh")} value={eq.highDb} onChange={(v) => onEqChange({ ...eq, highDb: v })} />
         </div>
       </section>
 
       <section className="mixer-section">
-        <h4>空间混响</h4>
+        <h4>{t("mixer.reverb")}</h4>
         <div className="seg-control">
           {(
             [
-              ["off", "关闭"],
-              ["studio", "录音室"],
-              ["hall", "音乐厅"],
+              ["off", t("fx.reverb.off")],
+              ["studio", t("fx.reverb.studio")],
+              ["hall", t("fx.reverb.hall")],
             ] as Array<[ReverbPreset, string]>
           ).map(([id, label]) => (
             <button
@@ -168,7 +169,7 @@ export const MixerPanel: React.FC<Props> = ({
           ))}
         </div>
         <label className="mixer-slider">
-          <span>干湿比 {Math.round(reverbWet * 100)}%</span>
+          <span>{t("mixer.wet", { pct: Math.round(reverbWet * 100) })}</span>
           <input
             type="range"
             min={0.05}
@@ -182,9 +183,9 @@ export const MixerPanel: React.FC<Props> = ({
       </section>
 
       <section className="mixer-section grow">
-        <h4>总输出</h4>
+        <h4>{t("mixer.output")}</h4>
         <Spectrum isPlaying={isPlaying} getFrequencyBins={getFrequencyBins} />
-        <div className="vu" title="主总线峰值电平">
+        <div className="vu" title={t("mixer.vuTip")}>
           <div className={`vu-fill ${vu > 85 ? "hot" : vu > 65 ? "warm" : ""}`} style={{ width: `${vu}%` }} />
         </div>
       </section>

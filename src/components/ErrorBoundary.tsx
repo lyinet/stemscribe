@@ -1,5 +1,6 @@
 import React from "react";
 import { RefreshCw } from "lucide-react";
+import { t } from "../i18n";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -41,11 +42,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       return (
         <div className="error-boundary-compact">
           <div className="error-boundary-title">
-            {this.props.label ? `「${this.props.label}」` : ""}面板渲染出错
+            {t("error.panelFailed", { label: this.props.label ?? "" })}
           </div>
           <pre className="error-boundary-detail">{message}</pre>
           <button className="btn btn-sm" onClick={this.reset}>
-            <RefreshCw size={13} /> 重试
+            <RefreshCw size={13} /> {t("error.retry")}
           </button>
         </div>
       );
@@ -53,11 +54,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
     return (
       <div className="error-boundary-full">
-        <div className="error-boundary-title">界面出现了问题</div>
+        <div className="error-boundary-title">{t("error.title")}</div>
         <pre className="error-boundary-detail">{message}</pre>
         <div className="error-boundary-actions">
           <button className="btn btn-primary" onClick={() => window.location.reload()}>
-            重新加载界面
+            {t("error.reload")}
           </button>
           <button
             className="btn"
@@ -65,7 +66,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               navigator.clipboard?.writeText(message).catch(() => {});
             }}
           >
-            复制错误信息
+            {t("error.copy")}
           </button>
         </div>
       </div>

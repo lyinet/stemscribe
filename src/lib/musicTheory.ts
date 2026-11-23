@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+import type { I18nKey } from "../i18n";
 import type { ChordEvent } from "../types/music";
 
 export const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -6,7 +8,8 @@ const NOTE_NAMES_NEUTRAL = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A"
 
 export interface GuitarTuningPreset {
   id: string;
-  label: string;
+  labelKey?: I18nKey;
+  label?: string;
   openMidi: number[]; // 1st string (high) -> 6th string (low)
   stringLabels: string[];
 }
@@ -14,7 +17,7 @@ export interface GuitarTuningPreset {
 export const GUITAR_TUNINGS: GuitarTuningPreset[] = [
   {
     id: "standard",
-    label: "标准 (EADGBE)",
+    labelKey: "tuning.standard",
     openMidi: [64, 59, 55, 50, 45, 40],
     stringLabels: ["1e", "2B", "3G", "4D", "5A", "6E"],
   },
@@ -26,13 +29,13 @@ export const GUITAR_TUNINGS: GuitarTuningPreset[] = [
   },
   {
     id: "half_down",
-    label: "降半音 (Eb)",
+    labelKey: "tuning.halfDown",
     openMidi: [63, 58, 54, 49, 44, 39],
     stringLabels: ["1eb", "2Bb", "3Gb", "4Db", "5Ab", "6Eb"],
   },
   {
     id: "dadgad",
-    label: "DADGAD 指弹",
+    labelKey: "tuning.dadgad",
     openMidi: [62, 57, 55, 50, 45, 38],
     stringLabels: ["1D", "2A", "3G", "4D", "5A", "6D"],
   },
@@ -179,7 +182,7 @@ export function recommendCapoFrets(
     new Set(chords.map((c) => transposeChordSymbol(c.symbol, transposeSemitones, useFlats)))
   );
   if (uniqueSymbols.length === 0) {
-    return [{ fret: 0, friendlyRatio: 1, sampleShapes: [], label: "原调不夹 (0品)" }];
+    return [{ fret: 0, friendlyRatio: 1, sampleShapes: [], label: t("capo.noCapo") }];
   }
 
   const results: CapoRecommendation[] = [];
@@ -193,8 +196,8 @@ export function recommendCapoFrets(
       sampleShapes: shapes.slice(0, 4),
       label:
         fret === 0
-          ? `原调 0 品 (${Math.round(ratio * 100)}% 开放指法)`
-          : `夹 ${fret} 品 · ${shapes.slice(0, 3).join("/")} (${Math.round(ratio * 100)}%)`,
+          ? t("capo.fret0", { pct: Math.round(ratio * 100) })
+          : t("capo.fretN", { fret, shapes: shapes.slice(0, 3).join("/"), pct: Math.round(ratio * 100) }),
     });
   }
 

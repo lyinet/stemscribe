@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Layers, Plus, X } from "lucide-react";
+import { t, type I18nKey } from "../i18n";
 import type { ImportStemSpec } from "../types/music";
 
 interface Props {
@@ -12,14 +13,14 @@ interface Props {
   onCancel: () => void;
 }
 
-const ROLE_OPTIONS: Array<{ v: string; label: string }> = [
-  { v: "lead", label: "主唱" },
-  { v: "backing", label: "和声" },
-  { v: "drums", label: "鼓" },
-  { v: "perc", label: "打击乐" },
-  { v: "bass", label: "贝斯" },
-  { v: "other", label: "其他" },
-  { v: "mix", label: "混音（原曲）" },
+const ROLE_OPTIONS: Array<{ v: string; labelKey: I18nKey }> = [
+  { v: "lead", labelKey: "stem.role.lead" },
+  { v: "backing", labelKey: "stem.role.backing" },
+  { v: "drums", labelKey: "stem.role.drums" },
+  { v: "perc", labelKey: "stem.role.perc" },
+  { v: "bass", labelKey: "stem.role.bass" },
+  { v: "other", labelKey: "stem.role.other" },
+  { v: "mix", labelKey: "stem.role.mix" },
 ];
 
 const fileName = (p: string) => p.split("/").pop() ?? p;
@@ -80,15 +81,14 @@ export const ImportStemsModal: React.FC<Props> = ({
       >
         <div className="card-header">
           <div className="card-title">
-            <Layers size={15} /> 导入分轨（Suno 等）
+            <Layers size={15} /> {t("import.title")}
           </div>
           <button className="btn btn-sm" onClick={onCancel}>
             <X size={14} />
           </button>
         </div>
         <p style={{ fontSize: 12, color: "var(--text-3)", margin: "4px 0 10px" }}>
-          可一次多选（⌘/⇧-click）或点「继续添加」；已按文件名猜测每轨的角色，可在下方修改。
-          标记为「混音（原曲）」的文件将作为修复对照原曲，没有提供混音时会自动把所有分轨相加作为原曲。
+          {t("import.hint")}
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {rows.map((r, i) => (
@@ -120,13 +120,13 @@ export const ImportStemsModal: React.FC<Props> = ({
               >
                 {ROLE_OPTIONS.map((o) => (
                   <option key={o.v} value={o.v}>
-                    {o.label}
+                    {t(o.labelKey)}
                   </option>
                 ))}
               </select>
               <button
                 className="btn btn-sm"
-                title="移除该文件"
+                title={t("import.removeTip")}
                 onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
               >
                 <X size={12} />
@@ -139,11 +139,11 @@ export const ImportStemsModal: React.FC<Props> = ({
           style={{ justifyContent: "space-between", gap: 8, marginTop: 14 }}
         >
           <button className="btn btn-sm" onClick={addMore} disabled={adding}>
-            <Plus size={13} /> {adding ? "选择中…" : "继续添加"}
+            <Plus size={13} /> {adding ? t("import.adding") : t("import.addMore")}
           </button>
           <div className="row" style={{ gap: 8 }}>
             <button className="btn" onClick={onCancel}>
-              取消
+              {t("common.cancel")}
             </button>
             <button
               className="btn btn-primary"
@@ -156,7 +156,7 @@ export const ImportStemsModal: React.FC<Props> = ({
                 onConfirm(stems, mixPath);
               }}
             >
-              导入 {stemCount} 条分轨
+              {t("import.do", { n: stemCount })}
             </button>
           </div>
         </div>

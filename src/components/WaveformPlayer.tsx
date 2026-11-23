@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { t } from "../i18n";
 import { Pause, Play, Repeat, Scissors, Sliders, Sparkles, Timer, TrendingUp, Volume2, VolumeX } from "lucide-react";
 import type { MasterEqState } from "../lib/audioEngine";
 import type { StemMixerState, StemOutput } from "../types/music";
@@ -50,11 +51,11 @@ const STEM_COLORS: Record<string, string> = {
 };
 
 const MIX_PRESETS: Array<{ id: MixPresetId; label: string }> = [
-  { id: "original", label: "原曲均衡" },
-  { id: "karaoke", label: "消人声伴奏" },
-  { id: "no_drums", label: "去鼓跟打" },
-  { id: "bass_focus", label: "贝斯扒带" },
-  { id: "vocals_only", label: "人声清唱" },
+  { id: "original", label: t("wave.p.original") },
+  { id: "karaoke", label: t("wave.p.karaoke") },
+  { id: "no_drums", label: t("wave.p.noDrums") },
+  { id: "bass_focus", label: t("wave.p.bass") },
+  { id: "vocals_only", label: t("wave.p.vocals") },
 ];
 
 const SpectrumBarCanvas: React.FC<{
@@ -221,7 +222,7 @@ export const WaveformPlayer: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header">
-        <div className="card-title">多轨混音台 · 渐进提速练琴 · 3 段 EQ · 实时频谱</div>
+        <div className="card-title">{t("wave.title")}</div>
         <div className="row">
           <SpectrumBarCanvas isPlaying={isPlaying} getFrequencyBins={getFrequencyBins} />
           <span className="muted">
@@ -233,21 +234,21 @@ export const WaveformPlayer: React.FC<Props> = ({
       <div className="transport-bar">
         <button className="btn btn-primary" onClick={onTogglePlay} disabled={stems.length === 0}>
           {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-          {isPlaying ? "暂停" : "播放"}
+          {isPlaying ? t("wave.pause") : t("wave.play")}
         </button>
 
         <button
           className={`btn btn-sm ${countInEnabled ? "btn-active" : ""}`}
           onClick={onToggleCountIn}
         >
-          4 拍预备
+          {t("wave.countIn")}
         </button>
 
         <button
           className={`btn btn-sm ${metronomeEnabled ? "btn-active" : ""}`}
           onClick={onToggleMetronome}
         >
-          <Timer size={13} /> 节拍器
+          <Timer size={13} /> {t("wave.metronome")}
         </button>
 
         <div className="row">
@@ -268,7 +269,7 @@ export const WaveformPlayer: React.FC<Props> = ({
         </div>
 
         <div className="row">
-          <span className="muted">移调</span>
+          <span className="muted">{t("wave.transpose")}</span>
           <button
             className="btn btn-sm"
             onClick={() => onTransposeChange(Math.max(-6, transposeSemitones - 1))}
@@ -308,9 +309,9 @@ export const WaveformPlayer: React.FC<Props> = ({
           <button
             className={`btn btn-sm ${progressiveRampEnabled ? "btn-active" : ""}`}
             onClick={onToggleProgressiveRamp}
-            title="开启后，每次 A-B 循环结束自动提速 +5%，直至恢复 1.0x 原速"
+            title={t("wave.rampTip")}
           >
-            <TrendingUp size={12} /> 渐进提速
+            <TrendingUp size={12} /> {t("wave.ramp")}
           </button>
           <button className="btn btn-sm" onClick={() => onSetLoopA(currentTime)}>
             A ({fmt(loopA)})
@@ -323,7 +324,7 @@ export const WaveformPlayer: React.FC<Props> = ({
             disabled={durationSec <= 0 || loopB <= loopA + 0.05}
             onClick={onExportLoopSlice}
           >
-            <Scissors size={12} /> 导切片
+            <Scissors size={12} /> {t("wave.slice")}
           </button>
         </div>
       </div>
@@ -342,7 +343,7 @@ export const WaveformPlayer: React.FC<Props> = ({
         }}
       >
         <div className="row" style={{ flexWrap: "wrap" }}>
-          <span className="muted">练琴预设</span>
+          <span className="muted">{t("wave.presets")}</span>
           {MIX_PRESETS.map((p) => (
             <button
               key={p.id}
@@ -359,7 +360,7 @@ export const WaveformPlayer: React.FC<Props> = ({
           <span className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <Sliders size={12} /> EQ
           </span>
-          <span className="muted">低 {eq.lowDb}dB</span>
+          <span className="muted">{t("wave.eqLow", { db: eq.lowDb })}</span>
           <input
             type="range"
             min={-12}
@@ -369,7 +370,7 @@ export const WaveformPlayer: React.FC<Props> = ({
             onChange={(e) => onEqChange({ ...eq, lowDb: Number(e.target.value) })}
             style={{ width: 54 }}
           />
-          <span className="muted">中 {eq.midDb}dB</span>
+          <span className="muted">{t("wave.eqMid", { db: eq.midDb })}</span>
           <input
             type="range"
             min={-12}
@@ -379,7 +380,7 @@ export const WaveformPlayer: React.FC<Props> = ({
             onChange={(e) => onEqChange({ ...eq, midDb: Number(e.target.value) })}
             style={{ width: 54 }}
           />
-          <span className="muted">高 {eq.highDb}dB</span>
+          <span className="muted">{t("wave.eqHigh", { db: eq.highDb })}</span>
           <input
             type="range"
             min={-12}
@@ -393,14 +394,14 @@ export const WaveformPlayer: React.FC<Props> = ({
             className="btn btn-sm"
             onClick={() => onEqChange({ lowDb: 0, midDb: 0, highDb: 0 })}
           >
-            归零
+            {t("wave.reset")}
           </button>
         </div>
       </div>
 
       {stems.length === 0 ? (
         <div className="muted" style={{ padding: "18px 0", textAlign: "center" }}>
-          可直接从 Finder 拖入音频文件，或点击右上角「导入」后执行「AI 4 轨分离」。
+          {t("wave.dropHint")}
         </div>
       ) : (
         stems.map((stem) => {
@@ -415,14 +416,14 @@ export const WaveformPlayer: React.FC<Props> = ({
                   <button
                     className={`btn btn-sm ${st.muted ? "btn-active" : ""}`}
                     onClick={() => onMixerChange(stem.name, { muted: !st.muted })}
-                    title="静音"
+                    title={t("wave.mute")}
                   >
                     {st.muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
                   </button>
                   <button
                     className={`btn btn-sm ${st.solo ? "btn-active" : ""}`}
                     onClick={() => onMixerChange(stem.name, { solo: !st.solo })}
-                    title="独奏"
+                    title={t("wave.solo")}
                   >
                     S
                   </button>
@@ -432,7 +433,7 @@ export const WaveformPlayer: React.FC<Props> = ({
                     max={1}
                     step={0.05}
                     value={st.gain}
-                    title="音量"
+                    title={t("wave.volume")}
                     onChange={(e) => onMixerChange(stem.name, { gain: Number(e.target.value) })}
                     style={{ width: 62 }}
                   />
@@ -443,7 +444,7 @@ export const WaveformPlayer: React.FC<Props> = ({
                     max={1}
                     step={0.1}
                     value={st.pan ?? 0}
-                    title="左右声像"
+                    title={t("wave.pan")}
                     onChange={(e) => onMixerChange(stem.name, { pan: Number(e.target.value) })}
                     style={{ width: 48 }}
                   />
@@ -467,7 +468,7 @@ export const WaveformPlayer: React.FC<Props> = ({
                 onClick={() => onTranscribeStem(stem)}
               >
                 <Sparkles size={13} />
-                {transcribingStem === stem.name ? "扒谱中..." : "转 MIDI"}
+                {transcribingStem === stem.name ? t("wave.transcribing") : t("wave.toMidi")}
               </button>
             </div>
           );

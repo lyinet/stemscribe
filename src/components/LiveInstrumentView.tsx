@@ -7,6 +7,7 @@ import {
   recommendCapoFrets,
   transposeChordSymbol,
 } from "../lib/musicTheory";
+import { t } from "../i18n";
 import type { MidiInputDeviceInfo } from "../lib/webMidi";
 import type { ChordEvent, MidiNote } from "../types/music";
 
@@ -164,11 +165,11 @@ export const LiveInstrumentView: React.FC<Props> = ({
       <div className="card-header">
         <div className="card-title">
           <Piano size={14} />
-          <span>琴键 / 指板</span>
+          <span>{t("live.title")}</span>
           {soundingChordSymbol && (
             <span className="badge ok">
-              实际和弦：{soundingChordSymbol}
-              {capoFret > 0 && capoChordShape ? ` · 变调夹 ${capoFret} 品按 ${capoChordShape}` : ""}
+              {t("live.soundingChord", { chord: soundingChordSymbol })}
+              {capoFret > 0 && capoChordShape ? t("live.capoShape", { fret: capoFret, shape: capoChordShape }) : ""}
             </span>
           )}
         </div>
@@ -177,20 +178,20 @@ export const LiveInstrumentView: React.FC<Props> = ({
           <button
             className={`btn btn-sm ${qwertyEnabled ? "btn-active" : ""}`}
             onClick={() => setQwertyEnabled((v) => !v)}
-            title="用电脑键盘 A–L / W–P 直接弹琴，Z / X 切换八度"
+            title={t("live.qwertyTip")}
           >
-            <Keyboard size={13} /> {qwertyEnabled ? `键盘弹琴 (C${qwertyOctave})` : "电脑键盘弹琴"}
+            <Keyboard size={13} /> {qwertyEnabled ? t("live.qwertyOn", { oct: `C${qwertyOctave}` }) : t("live.qwertyOff")}
           </button>
           <button
             className={`btn btn-sm ${midiDevices.length > 0 ? "btn-active" : ""}`}
             onClick={onConnectMidi}
-            title="接入外接 USB-MIDI 键盘或电钢琴实时弹奏与跟弹打分"
+            title={t("live.midiTip")}
           >
             <Usb size={12} />
-            {midiDevices.length > 0 ? `MIDI: ${midiDevices[0].name.slice(0, 14)}` : "连接 USB-MIDI 键盘"}
+            {midiDevices.length > 0 ? `MIDI: ${midiDevices[0].name.slice(0, 14)}` : t("live.midiConnect")}
           </button>
           <Guitar size={14} color="#9aa3b2" />
-          <span className="muted">吉他变调夹</span>
+          <span className="muted">{t("live.capo")}</span>
           <select
             className="select"
             style={{ width: 92, padding: "4px 8px" }}
@@ -199,7 +200,7 @@ export const LiveInstrumentView: React.FC<Props> = ({
           >
             {Array.from({ length: 10 }, (_, i) => (
               <option key={i} value={i}>
-                {i === 0 ? "不夹 (0品)" : `夹 ${i} 品`}
+                {i === 0 ? t("capo.none") : t("capo.atFret", { fret: i })}
               </option>
             ))}
           </select>
@@ -207,9 +208,9 @@ export const LiveInstrumentView: React.FC<Props> = ({
             <button
               className="btn btn-sm btn-active"
               onClick={() => onCapoChange(topCapo.fret)}
-              title="应用 AI 推荐的最顺手开放和弦变调夹方案"
+              title={t("live.capoSuggestTip")}
             >
-              <Sparkles size={12} /> 推荐：{topCapo.label}
+              <Sparkles size={12} /> {t("live.capoSuggest", { label: topCapo.label })}
             </button>
           )}
         </div>
@@ -219,7 +220,7 @@ export const LiveInstrumentView: React.FC<Props> = ({
       <div style={{ marginBottom: 14 }}>
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
           <span className="muted">
-            🎹 4 八度交互键盘（C3–B6 · 蓝=曲目旋律 / 绿=外接 MIDI 实弹 / 琥珀=和弦组成音 · 点击发声）
+            {t("live.keyboardLegend")}
           </span>
         </div>
         <div style={{ position: "relative", height: 108, userSelect: "none", overflowX: "auto" }}>
@@ -323,19 +324,19 @@ export const LiveInstrumentView: React.FC<Props> = ({
       <div>
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
           <span className="muted">
-            🎸 实时 6 弦吉他指板（0–15 品 · 点击任意品格试听单音 · 蓝=旋律音高 / 琥珀=和弦内音）
+            {t("live.fretboardLegend")}
           </span>
           <div className="row" style={{ gap: 6 }}>
-            <span className="muted" style={{ fontSize: 11.5 }}>吉他调弦</span>
+            <span className="muted" style={{ fontSize: 11.5 }}>{t("live.tuning")}</span>
             <select
               className="select"
               value={tuningId}
               onChange={(e) => setTuningId(e.target.value)}
               style={{ width: 148, padding: "3px 8px", fontSize: 11.5 }}
             >
-              {GUITAR_TUNINGS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
+              {GUITAR_TUNINGS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.labelKey ? t(preset.labelKey) : preset.label}
                 </option>
               ))}
             </select>
@@ -392,7 +393,7 @@ export const LiveInstrumentView: React.FC<Props> = ({
                     <div
                       key={fret}
                       onClick={() => onAuditionNote(midi)}
-                      title={`${activeTuning.stringLabels[sIdx]} 弦 ${fret} 品 · ${NOTE_NAMES_SHARP[pc]}${Math.floor(midi / 12) - 1}`}
+                      title={t("live.stringFret", { string: activeTuning.stringLabels[sIdx], fret, note: `${NOTE_NAMES_SHARP[pc]}${Math.floor(midi / 12) - 1}` })}
                       style={{
                         height: "100%",
                         display: "flex",

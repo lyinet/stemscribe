@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "../i18n";
 import {
   ChevronLeft,
   ChevronRight,
@@ -193,11 +194,11 @@ export const ScoreViewer: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header" style={{ flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title" title="钢琴卷帘编辑与多视图乐谱导出">
-          乐谱
+        <div className="card-title" title={t("score.titleTip")}>
+          {t("score.title")}
           {stemName && (
             <span className="badge">
-              {stemName} · {bpm.toFixed(1)} BPM · {notes.length} 音符
+              {stemName} · {bpm.toFixed(1)} BPM · {t("score.notes", { n: notes.length })}
             </span>
           )}
         </div>
@@ -207,28 +208,28 @@ export const ScoreViewer: React.FC<Props> = ({
             disabled={notes.length === 0}
             onClick={onToggleMidiAudition}
           >
-            <Volume2 size={13} /> 跟播试听
+            <Volume2 size={13} /> {t("score.follow")}
           </button>
           <select
             className="select"
             value={synthTimbre}
             onChange={(e) => onTimbreChange(e.target.value as SynthTimbre)}
             style={{ width: 86, padding: "4px 6px", fontSize: 12 }}
-            title="选择 MIDI 合成试听音色"
+            title={t("score.timbreTip")}
           >
-            <option value="triangle">电钢音色</option>
-            <option value="sine">贝斯柔和</option>
-            <option value="sawtooth">合成锯齿</option>
-            <option value="square">复古方波</option>
+            <option value="triangle">{t("score.triangle")}</option>
+            <option value="sine">{t("score.sine")}</option>
+            <option value="sawtooth">{t("score.saw")}</option>
+            <option value="square">{t("score.square")}</option>
           </select>
-          <button className="btn btn-sm" disabled={!canUndo} onClick={onUndo} title="撤销 (Cmd+Z)">
+          <button className="btn btn-sm" disabled={!canUndo} onClick={onUndo} title={t("score.undoTip")}>
             <Undo2 size={13} />
           </button>
           <button
             className="btn btn-sm"
             disabled={!canRedo}
             onClick={onRedo}
-            title="重做 (Cmd+Shift+Z)"
+            title={t("score.redoTip")}
           >
             <Redo2 size={13} />
           </button>
@@ -242,10 +243,10 @@ export const ScoreViewer: React.FC<Props> = ({
           <div className="seg">
             {(
               [
-                ["pianoroll", "卷帘"],
-                ["staff", "五线谱"],
-                ["tab", "吉他谱"],
-                ["jianpu", "简谱"],
+                ["pianoroll", t("score.pianoroll")],
+                ["staff", t("score.staff")],
+                ["tab", t("score.tab")],
+                ["jianpu", t("score.jianpu")],
               ] as const
             ).map(([id, label]) => (
               <button key={id} className={viewMode === id ? "on" : ""} onClick={() => setViewMode(id)}>
@@ -263,9 +264,9 @@ export const ScoreViewer: React.FC<Props> = ({
             className="btn btn-sm"
             disabled={notes.length === 0 || !hasChords}
             onClick={onExportMidiWithChords}
-            title="导出双轨 Type-1 MIDI（轨 1 主旋律 + 轨 2 和弦伴奏）"
+            title={t("score.dualMidTip")}
           >
-            <Layers size={13} /> 双轨 .mid
+            <Layers size={13} /> {t("score.dualMid")}
           </button>
           <button
             className="btn btn-sm btn-primary"
@@ -282,20 +283,20 @@ export const ScoreViewer: React.FC<Props> = ({
           <div className="row" style={{ gap: 6 }}>
             {viewMode === "staff" && (
               <>
-                <span className="muted" style={{ fontSize: 11 }}>谱号</span>
+                <span className="muted" style={{ fontSize: 11 }}>{t("score.clef")}</span>
                 <div className="seg">
                   <button className={clef === "treble" ? "on" : ""} onClick={() => setClef("treble")}>
-                    高音
+                    {t("score.treble")}
                   </button>
                   <button className={clef === "bass" ? "on" : ""} onClick={() => setClef("bass")}>
-                    低音
+                    {t("score.bass")}
                   </button>
                 </div>
               </>
             )}
             {viewMode === "jianpu" && (
               <span className="badge ok">
-                首调简谱：1 = {keyTonic || "C"} · 4/4（高八度上方加点 / 低八度下方加点）
+                {t("score.jianpuHint", { tonic: keyTonic || "C" })}
               </span>
             )}
           </div>
@@ -306,17 +307,17 @@ export const ScoreViewer: React.FC<Props> = ({
               disabled={safePage <= 0}
               onClick={() => setPageIdx((p) => Math.max(0, p - 1))}
             >
-              <ChevronLeft size={12} /> 上一页
+              <ChevronLeft size={12} /> {t("score.prevPage")}
             </button>
             <span className="muted" style={{ fontSize: 11.5 }}>
-              第 {safePage + 1} / {totalPages} 页
+              {t("score.page", { cur: safePage + 1, total: totalPages })}
             </span>
             <button
               className="btn btn-sm"
               disabled={safePage >= totalPages - 1}
               onClick={() => setPageIdx((p) => Math.min(totalPages - 1, p + 1))}
             >
-              下一页 <ChevronRight size={12} />
+              {t("score.nextPage")} <ChevronRight size={12} />
             </button>
           </div>
         </div>
@@ -324,7 +325,7 @@ export const ScoreViewer: React.FC<Props> = ({
 
       {notes.length === 0 && viewMode !== "pianoroll" ? (
         <div className="muted" style={{ padding: "26px 0", textAlign: "center" }}>
-          点击任意音轨右侧的「转 MIDI」即可生成乐谱，或在「卷帘」视图中双击直接手绘音符。
+          {t("score.empty")}
         </div>
       ) : viewMode === "pianoroll" ? (
         <PianoRollEditor
@@ -360,7 +361,7 @@ export const ScoreViewer: React.FC<Props> = ({
                 }}
               >
                 <div className="muted" style={{ fontSize: 10.5, marginBottom: 6 }}>
-                  第 {globalBar} 小节
+                  {t("score.bar", { n: globalBar })}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", gap: 6 }}>
                   {group.map((n, nIdx) => {

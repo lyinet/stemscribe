@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import { Circle, Download, HardDrive, Layers, Mic, Square, Trash2 } from "lucide-react";
 import {
   OverdubTakeRecorder,
@@ -114,27 +115,27 @@ export const CoverStudioView: React.FC<Props> = ({
     a.click();
   };
 
-  const handleArchiveToDisk = async (t: RecordedTake) => {
-    setSavingId(t.id);
+  const handleArchiveToDisk = async (tk: RecordedTake) => {
+    setSavingId(tk.id);
     try {
-      const b64 = uint8ToBase64(t.wavBytes);
-      const savedPath = await onArchiveTake(songName || "cover", t.label, b64);
-      setTakes((prev) => prev.map((x) => (x.id === t.id ? { ...x, savedPath } : x)));
+      const b64 = uint8ToBase64(tk.wavBytes);
+      const savedPath = await onArchiveTake(songName || "cover", tk.label, b64);
+      setTakes((prev) => prev.map((x) => (x.id === tk.id ? { ...x, savedPath } : x)));
     } catch (err) {
-      setErrorMsg(`归档失败: ${String(err)}`);
+      setErrorMsg(t("cover.archiveFail", { err: String(err) }));
     } finally {
       setSavingId(null);
     }
   };
 
-  const handleBounceFinalCover = async (t: RecordedTake) => {
-    setBouncingId(t.id);
+  const handleBounceFinalCover = async (tk: RecordedTake) => {
+    setBouncingId(tk.id);
     setErrorMsg("");
     try {
-      const b64 = uint8ToBase64(t.wavBytes);
-      await onBounceCoverWav(t.label, b64, takeGain, takeOffsetMs);
+      const b64 = uint8ToBase64(tk.wavBytes);
+      await onBounceCoverWav(tk.label, b64, takeGain, takeOffsetMs);
     } catch (err) {
-      setErrorMsg(`合轨导出失败: ${String(err)}`);
+      setErrorMsg(t("cover.bounceFail", { err: String(err) }));
     } finally {
       setBouncingId(null);
     }
@@ -143,17 +144,17 @@ export const CoverStudioView: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header">
-        <div className="card-title" title="翻唱 / 独奏多 Take 录制与成品合轨导出">
+        <div className="card-title" title={t("cover.titleTip")}>
           <Mic size={14} color="#f43f5e" />
-          <span>翻唱录音</span>
+          <span>{t("cover.title")}</span>
           {countdown > 0 && (
             <span className="badge" style={{ color: "#fbbf24", borderColor: "#f59e0b", fontWeight: 700 }}>
-              准备开录：{countdown} ...
+              {t("cover.countdown", { n: countdown })}
             </span>
           )}
           {recording && (
             <span className="badge" style={{ color: "#fda4af", borderColor: "#f43f5e" }}>
-              ● 录音中 {fmtTimer(elapsedSec)}
+              ● {t("cover.recording", { time: fmtTimer(elapsedSec) })}
             </span>
           )}
         </div>
@@ -165,7 +166,7 @@ export const CoverStudioView: React.FC<Props> = ({
               checked={useCountdown}
               onChange={(e) => setUseCountdown(e.target.checked)}
             />
-            3 秒倒计时
+            {t("cover.count3")}
           </label>
           <label className="row muted" style={{ cursor: "pointer", gap: 5 }}>
             <input
@@ -173,7 +174,7 @@ export const CoverStudioView: React.FC<Props> = ({
               checked={syncWithBacking}
               onChange={(e) => setSyncWithBacking(e.target.checked)}
             />
-            录音时联动伴奏
+            {t("cover.linkBacking")}
           </label>
           {!recording ? (
             <button
@@ -181,11 +182,11 @@ export const CoverStudioView: React.FC<Props> = ({
               style={{ background: "#e11d48", borderColor: "#e11d48" }}
               onClick={handleStartRec}
             >
-              <Circle size={13} fill="currentColor" /> 开始同步叠录
+              <Circle size={13} fill="currentColor" /> {t("cover.record")}
             </button>
           ) : (
             <button className="btn" onClick={handleStopRec}>
-              <Square size={13} fill="currentColor" /> 停止并生成 WAV
+              <Square size={13} fill="currentColor" /> {t("cover.stop")}
             </button>
           )}
         </div>
@@ -205,7 +206,7 @@ export const CoverStudioView: React.FC<Props> = ({
         }}
       >
         <div className="row" style={{ gap: 6 }}>
-          <span className="muted">人声/独奏合轨增益</span>
+          <span className="muted">{t("cover.gain")}</span>
           <input
             type="range"
             min={0.5}
@@ -219,7 +220,7 @@ export const CoverStudioView: React.FC<Props> = ({
         </div>
 
         <div className="row" style={{ gap: 6 }}>
-          <span className="muted">声卡/耳机延迟补偿</span>
+          <span className="muted">{t("cover.latency")}</span>
           <input
             type="range"
             min={-150}
@@ -243,13 +244,13 @@ export const CoverStudioView: React.FC<Props> = ({
 
       {takes.length === 0 ? (
         <div className="muted" style={{ padding: "8px 0" }}>
-          提示：先在混音器中切换「消人声伴奏」或「去鼓组」，再点击「开始同步叠录」。录完后点击「合轨成品 WAV」即可将你的叠录与当前伴奏按 -1.0 dBFS 峰值标准化合并导出。
+          {t("cover.hint")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {takes.map((t) => (
+          {takes.map((tk) => (
             <div
-              key={t.id}
+              key={tk.id}
               style={{
                 display: "flex",
                 flexWrap: "wrap",
@@ -266,53 +267,53 @@ export const CoverStudioView: React.FC<Props> = ({
                 <div className="row" style={{ gap: 6 }}>
                   <input
                     className="input"
-                    value={t.label}
+                    value={tk.label}
                     onChange={(e) =>
                       setTakes((prev) =>
-                        prev.map((x) => (x.id === t.id ? { ...x, label: e.target.value } : x))
+                        prev.map((x) => (x.id === tk.id ? { ...x, label: e.target.value } : x))
                       )
                     }
                     style={{ width: 120, padding: "2px 6px", fontSize: 12.5, fontWeight: 600 }}
-                    title="自定义本条录音名称"
+                    title={t("cover.renameTip")}
                   />
-                  <span className="muted" style={{ fontSize: 12 }}>{t.durationSec.toFixed(1)}s</span>
-                  {t.savedPath && <span className="badge ok">已本地归档</span>}
+                  <span className="muted" style={{ fontSize: 12 }}>{tk.durationSec.toFixed(1)}s</span>
+                  {tk.savedPath && <span className="badge ok">{t("cover.archived")}</span>}
                 </div>
                 <div className="muted" style={{ fontSize: 11 }}>
-                  录制于 {t.createdAt} · 伴奏倍速 {Math.round(t.playbackRate * 100)}%
+                  {t("cover.recordedMeta", { at: tk.createdAt, pct: Math.round(tk.playbackRate * 100) })}
                 </div>
               </div>
 
-              <audio controls src={t.blobUrl} style={{ height: 32, maxWidth: 230 }} />
+              <audio controls src={tk.blobUrl} style={{ height: 32, maxWidth: 230 }} />
 
               <div className="row" style={{ flexWrap: "wrap" }}>
                 <button
                   className="btn btn-sm btn-primary"
-                  disabled={!hasStems || bouncingId === t.id}
-                  onClick={() => handleBounceFinalCover(t)}
-                  title="将当前激活伴奏分轨与本条叠录 Take 合轨为 -1.0 dBFS 标准化成品翻唱 WAV"
+                  disabled={!hasStems || bouncingId === tk.id}
+                  onClick={() => handleBounceFinalCover(tk)}
+                  title={t("cover.bounceTip")}
                 >
-                  <Layers size={12} /> {bouncingId === t.id ? "合轨中..." : "合轨成品 WAV"}
+                  <Layers size={12} /> {bouncingId === tk.id ? t("cover.bouncing") : t("cover.bounce")}
                 </button>
                 <button
                   className="btn btn-sm"
-                  disabled={savingId === t.id}
-                  onClick={() => handleArchiveToDisk(t)}
-                  title="归档干声 Take 至本地磁盘"
+                  disabled={savingId === tk.id}
+                  onClick={() => handleArchiveToDisk(tk)}
+                  title={t("cover.archiveTip")}
                 >
-                  <HardDrive size={12} /> {savingId === t.id ? "归档中..." : "归档干声"}
+                  <HardDrive size={12} /> {savingId === tk.id ? t("cover.archiving") : t("cover.archive")}
                 </button>
                 <button
                   className="btn btn-sm btn-active"
-                  onClick={() => handleDownloadTake(t)}
+                  onClick={() => handleDownloadTake(tk)}
                 >
-                  <Download size={12} /> 干声 WAV
+                  <Download size={12} /> {t("cover.dryWav")}
                 </button>
                 <button
                   className="btn btn-sm"
                   onClick={() => {
-                    URL.revokeObjectURL(t.blobUrl);
-                    setTakes((prev) => prev.filter((x) => x.id !== t.id));
+                    URL.revokeObjectURL(tk.blobUrl);
+                    setTakes((prev) => prev.filter((x) => x.id !== tk.id));
                   }}
                 >
                   <Trash2 size={12} />
@@ -326,7 +327,7 @@ export const CoverStudioView: React.FC<Props> = ({
       {archivedTakes.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <div className="muted" style={{ marginBottom: 6 }}>
-            已归档本地录音 WAV（共 {archivedTakes.length} 条）
+            {t("cover.archivedTitle", { count: archivedTakes.length })}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {archivedTakes.slice(0, 8).map((a) => (
@@ -337,7 +338,7 @@ export const CoverStudioView: React.FC<Props> = ({
                   style={{ cursor: "pointer", opacity: 0.7 }}
                   onClick={() => onDeleteArchivedTake(a.file_name)}
                 >
-                  <title>从磁盘删除该归档 Take</title>
+                  <title>{t("cover.deleteTip")}</title>
                 </Trash2>
               </span>
             ))}

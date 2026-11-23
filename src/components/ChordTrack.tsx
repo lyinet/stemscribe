@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Music, Plus, Trash2, Volume2 } from "lucide-react";
+import { t } from "../i18n";
 import { chordToRomanNumeral, parseChordSymbol, transposeChordSymbol } from "../lib/musicTheory";
 import type { ChordEvent } from "../types/music";
 
@@ -198,11 +199,11 @@ export const ChordTrack: React.FC<Props> = ({
   return (
     <div className="card" style={{ padding: "10px 14px" }}>
       <div className="card-header" style={{ marginBottom: 8 }}>
-        <div className="card-title" title="和弦轨与吉他指法图">
-          <Music size={14} /> 和弦
+        <div className="card-title" title={t("chords.titleTip")}>
+          <Music size={14} /> {t("chords.title")}
           {displayActive && (
             <span className="badge ok" style={{ fontSize: 12, fontWeight: 600 }}>
-              当前：{displayActive}
+              {t("chords.current", { chord: displayActive })}
             </span>
           )}
         </div>
@@ -211,18 +212,18 @@ export const ChordTrack: React.FC<Props> = ({
             <button
               className="btn btn-sm"
               onClick={() => onAuditionChord(displayActive)}
-              title={`扫弦试听当前和弦 ${displayActive}`}
+              title={t("chords.auditionTip", { chord: displayActive })}
             >
-              <Volume2 size={12} /> 试听 {displayActive}
+              <Volume2 size={12} /> {t("chords.audition", { chord: displayActive })}
             </button>
           )}
           {keyTonic && chords.length > 0 && (
             <button
               className={`btn btn-sm ${showRoman ? "btn-active" : ""}`}
               onClick={() => setShowRoman((v) => !v)}
-              title="切换显示罗马数字级数（I / IV / V / vi）"
+              title={t("chords.romanTip")}
             >
-              级数 (I–vi)
+              {t("chords.roman")}
             </button>
           )}
           <button
@@ -235,23 +236,23 @@ export const ChordTrack: React.FC<Props> = ({
                 .sort((a, b) => a.start_sec - b.start_sec);
               onChordsChange(next);
             }}
-            title="在当前播放位置插入一个新和弦"
+            title={t("chords.addTip")}
           >
-            <Plus size={12} /> 加和弦
+            <Plus size={12} /> {t("chords.add")}
           </button>
           <button
             className="btn btn-sm"
             disabled={detecting || durationSec <= 0}
             onClick={onDetectChords}
           >
-            {detecting ? "识别和弦中..." : chords.length > 0 ? "重新识别" : "识别全曲和弦"}
+            {detecting ? t("chords.detecting") : chords.length > 0 ? t("chords.redetect") : t("chords.detect")}
           </button>
         </div>
       </div>
 
       {chords.length === 0 ? (
         <div className="muted" style={{ fontSize: 12 }}>
-          点击「识别全曲和弦」，无需联网即可用 Rust DSP 分析每段和弦走向，并实时显示对应的吉他指法图（支持双击手动修正）。
+          {t("chords.empty")}
         </div>
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -293,7 +294,7 @@ export const ChordTrack: React.FC<Props> = ({
                     setEditingIdx(idx);
                     setDraftSymbol(c.symbol);
                   }}
-                  title="单击跳转并试听 · 双击修改和弦名"
+                  title={t("chords.chordTip")}
                   style={{
                     flex: `1 0 ${Math.max(64, Math.round(widthPct * 6))}px`,
                     padding: "6px 8px",

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Filter, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { t } from "../i18n";
 import type { MidiNote } from "../types/music";
 
 interface Props {
@@ -326,10 +327,10 @@ export const PianoRollEditor: React.FC<Props> = ({
     <div>
       <div className="row" style={{ marginBottom: 8, justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
         <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
-          <span className="muted">吸附网格</span>
+          <span className="muted">{t("piano.snap")}</span>
           <div className="seg">
             {[
-              { label: "关闭", val: 0 },
+              { label: t("piano.snapOff"), val: 0 },
               { label: "1/4", val: 1 },
               { label: "1/8", val: 2 },
               { label: "1/16", val: 4 },
@@ -350,7 +351,7 @@ export const PianoRollEditor: React.FC<Props> = ({
                 checked={highlightScale}
                 onChange={(e) => setHighlightScale(e.target.checked)}
               />
-              调内音阶高亮（橙色=调外音）
+              {t("piano.scaleHighlight")}
             </label>
           )}
         </div>
@@ -360,33 +361,33 @@ export const PianoRollEditor: React.FC<Props> = ({
             className="btn btn-sm"
             disabled={notes.length === 0}
             onClick={handleQuantizeAll}
-            title="按当前网格（关闭时默认 1/16）批量量化所有音符起点与时值"
+            title={t("piano.quantizeTip")}
           >
-            <Wand2 size={12} /> 量化全部
+            <Wand2 size={12} /> {t("piano.quantize")}
           </button>
           {scaleSet.size > 0 && (
             <button
               className="btn btn-sm"
               disabled={notes.length === 0}
               onClick={handleSnapAllToScale}
-              title="将所有橙色调外音就近吸附到当前歌曲调内音阶"
+              title={t("piano.snapScaleTip")}
             >
-              <Sparkles size={12} /> 调内修正
+              <Sparkles size={12} /> {t("piano.snapScale")}
             </button>
           )}
           <button
             className="btn btn-sm"
             disabled={notes.length === 0}
             onClick={handleRemoveShortNoise}
-            title="批量删除时值短于 80ms 的 AI 误检短杂音"
+            title={t("piano.denoiseTip")}
           >
-            <Filter size={12} /> 去杂音
+            <Filter size={12} /> {t("piano.denoise")}
           </button>
           <button
             className="btn btn-sm"
             disabled={notes.length === 0}
             onClick={() => handleShiftOctave(-1)}
-            title="全部音符整体降一个八度"
+            title={t("piano.octDownTip")}
           >
             <ArrowDown size={12} /> 8va
           </button>
@@ -394,13 +395,13 @@ export const PianoRollEditor: React.FC<Props> = ({
             className="btn btn-sm"
             disabled={notes.length === 0}
             onClick={() => handleShiftOctave(1)}
-            title="全部音符整体升一个八度"
+            title={t("piano.octUpTip")}
           >
             <ArrowUp size={12} /> 8va
           </button>
           {selectedNote && selectedIdx !== null && (
             <label className="muted" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
-              力度 {selectedNote.velocity}
+              {t("piano.velocity", { v: selectedNote.velocity })}
               <input
                 type="range"
                 min={20}
@@ -425,7 +426,7 @@ export const PianoRollEditor: React.FC<Props> = ({
               setSelectedIdx(null);
             }}
           >
-            <Trash2 size={12} /> 删除选中
+            <Trash2 size={12} /> {t("piano.deleteSel")}
           </button>
         </div>
       </div>

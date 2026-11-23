@@ -371,4 +371,4 @@ StemScribe 站在这些优秀开源项目的肩膀上：
 - **Cover studio**: record over the instrumental and export a mixed WAV; setlists and a full-screen prompter for live shows
 - Classic DAW layout (transport · tracks · editor), built with Tauri v2 + Rust + React. ~10 MB installer, MIT licensed.
 
-Download the latest `.dmg` from [Releases](https://github.com/lyinet/stemscribe/releases/latest) (macOS 13+, Apple Silicon). The UI is currently in Chinese; English localization is on the roadmap.
+Download the latest `.dmg` from [Releases](https://github.com/lyinet/stemscribe/releases/latest) (macOS 13+, Apple Silicon). The UI is available in Chinese (default) and English — pick your language in Settings → General → 语言 / Language. On first launch it defaults to English when your system language is not Chinese.

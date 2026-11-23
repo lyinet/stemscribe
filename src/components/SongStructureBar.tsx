@@ -1,5 +1,6 @@
 import React from "react";
 import { BookmarkPlus, Repeat, Sparkles, Waves } from "lucide-react";
+import { t } from "../i18n";
 import type { SongStructureSegment } from "../types/music";
 
 interface Props {
@@ -42,9 +43,9 @@ export const SongStructureBar: React.FC<Props> = ({
       <div className="card-header" style={{ marginBottom: segments.length > 0 ? 10 : 0, flexWrap: "wrap", gap: 6 }}>
         <div className="card-title">
           <Waves size={15} />
-          <span>智能曲式段落导航</span>
+          <span>{t("structure.title")}</span>
           {activeSeg && (
-            <span className="badge ok">当前：{activeSeg.label}</span>
+            <span className="badge ok">{t("structure.current", { label: activeSeg.label })}</span>
           )}
         </div>
         <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
@@ -52,18 +53,18 @@ export const SongStructureBar: React.FC<Props> = ({
             <button
               className="btn btn-sm"
               onClick={() => onLoopSection(activeSeg)}
-              title="将 A-B 循环区间锁定到当前段落"
+              title={t("structure.loopTip")}
             >
-              <Repeat size={12} /> 循环当前段
+              <Repeat size={12} /> {t("structure.loop")}
             </button>
           )}
           {segments.length > 0 && onConvertToMarkers && (
             <button
               className="btn btn-sm"
               onClick={() => onConvertToMarkers(segments)}
-              title="将识别到的全部段落一键生成段落书签（同步保存到工程与报告）"
+              title={t("structure.markAllTip")}
             >
-              <BookmarkPlus size={12} /> 全部转为书签
+              <BookmarkPlus size={12} /> {t("structure.markAll")}
             </button>
           )}
           <button
@@ -72,14 +73,14 @@ export const SongStructureBar: React.FC<Props> = ({
             onClick={onDetectStructure}
           >
             <Sparkles size={12} />
-            {detecting ? "分析曲式中..." : "自动识别段落"}
+            {detecting ? t("structure.detecting") : t("structure.detect")}
           </button>
         </div>
       </div>
 
       {segments.length === 0 ? (
         <div className="muted" style={{ marginTop: 6 }}>
-          点击「自动识别段落」使用本地 Rust DSP 自动切分前奏、主歌、副歌与尾奏，单击跳转、双击即可锁定 A-B 副歌循环。
+          {t("structure.empty")}
         </div>
       ) : (
         <div style={{ display: "flex", gap: 6, width: "100%", overflowX: "auto" }}>
@@ -95,7 +96,7 @@ export const SongStructureBar: React.FC<Props> = ({
                 key={seg.id}
                 onClick={() => onSeek(seg.start_sec)}
                 onDoubleClick={() => onLoopSection(seg)}
-                title={`${seg.label} (${seg.start_sec.toFixed(1)}s - ${seg.end_sec.toFixed(1)}s) · 单击跳转 / 双击设为 A-B 循环`}
+                title={t("structure.segTip", { label: seg.label, a: seg.start_sec.toFixed(1), b: seg.end_sec.toFixed(1) })}
                 style={{
                   flex: `1 1 ${widthPct}%`,
                   minWidth: 96,

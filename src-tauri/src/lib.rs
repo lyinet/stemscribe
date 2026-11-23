@@ -2,6 +2,7 @@ pub mod audio;
 pub mod batch;
 pub mod llm;
 pub mod menu;
+pub use menu::set_menu_language;
 pub mod ml;
 pub mod project;
 
@@ -776,6 +777,7 @@ pub fn run() {
             refine_midi_with_llm,
             advise_restoration,
             restore_agent,
+            set_menu_language,
             restore_agent_stop
         ])
         .run(tauri::generate_context!())

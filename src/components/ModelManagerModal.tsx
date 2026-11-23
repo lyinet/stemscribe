@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Download, FolderOpen, HardDrive, Trash2, X } from "lucide-react";
+import { t } from "../i18n";
 import {
   deleteOnnxModel,
   downloadOnnxModel,
@@ -59,7 +60,7 @@ export const ModelManagerModal: React.FC<Props> = ({
   if (!open) return null;
 
   const fmtSize = (bytes: number) =>
-    bytes > 0 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : "未安装";
+    bytes > 0 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : t("models.notInstalled");
 
   const fmtMb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
@@ -69,11 +70,11 @@ export const ModelManagerModal: React.FC<Props> = ({
     setMsgIsError(false);
     try {
       const saved = await downloadOnnxModel(id, urls[id] ?? "");
-      setMsg(`模型已就绪：${saved}`);
+      setMsg(t("models.ready", { path: saved }));
       await refresh();
       onModelsUpdated();
     } catch (err) {
-      setMsg(`下载失败：${String(err)}`);
+      setMsg(t("models.dlFail", { err: String(err) }));
       setMsgIsError(true);
     } finally {
       setBusyId(null);
@@ -88,11 +89,11 @@ export const ModelManagerModal: React.FC<Props> = ({
     setMsgIsError(false);
     try {
       const saved = await importOnnxModel(id, sourcePath);
-      setMsg(`已离线导入本地模型：${saved}`);
+      setMsg(t("models.imported", { path: saved }));
       await refresh();
       onModelsUpdated();
     } catch (err) {
-      setMsg(`本地导入失败：${String(err)}`);
+      setMsg(t("models.importFail", { err: String(err) }));
       setMsgIsError(true);
     } finally {
       setBusyId(null);
@@ -120,7 +121,7 @@ export const ModelManagerModal: React.FC<Props> = ({
       <div className="card" style={{ width: 650, maxWidth: "92vw" }}>
         <div className="card-header">
           <div className="card-title">
-            <HardDrive size={15} /> 本地 CoreML / ONNX 模型管理器
+            <HardDrive size={15} /> {t("models.title")}
           </div>
           <button className="btn btn-sm" onClick={onClose}>
             <X size={14} />
@@ -128,7 +129,7 @@ export const ModelManagerModal: React.FC<Props> = ({
         </div>
 
         <div className="muted" style={{ marginBottom: 12 }}>
-          本地缓存目录：{modelsDir}（未安装 ONNX 模型时，所有分轨与转谱功能仍可通过内置离线 DSP 引擎正常运行）
+          {t("models.dirHint", { dir: modelsDir })}
         </div>
 
         {models.map((m) => {
@@ -139,7 +140,7 @@ export const ModelManagerModal: React.FC<Props> = ({
               <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
                 <strong>{m.display_name}</strong>
                 <span className={`badge ${m.installed ? "ok" : ""}`}>
-                  {m.installed ? `已安装 · ${fmtSize(m.size_bytes)}` : "未安装"}
+                  {m.installed ? t("models.installed", { size: fmtSize(m.size_bytes) }) : t("models.notInstalled")}
                 </span>
               </div>
 
@@ -149,7 +150,7 @@ export const ModelManagerModal: React.FC<Props> = ({
 
               <input
                 className="input"
-                placeholder="输入可直连的 .onnx 下载链接（留空则直接点击下方「从本地导入 .onnx」）"
+                placeholder={t("models.urlPlaceholder")}
                 value={urls[m.id] ?? m.default_url}
                 onChange={(e) => setUrls((prev) => ({ ...prev, [m.id]: e.target.value }))}
                 style={{ marginBottom: 8, fontSize: 12 }}
@@ -158,8 +159,7 @@ export const ModelManagerModal: React.FC<Props> = ({
               {prog && busyId === m.id && (
                 <div style={{ marginBottom: 8 }}>
                   <div className="muted" style={{ marginBottom: 4 }}>
-                    下载中：{prog.percent.toFixed(1)}%（{fmtMb(prog.downloaded_bytes)}
-                    {prog.total_bytes > 0 ? ` / ${fmtMb(prog.total_bytes)}` : ""}）
+                    {t("models.downloading", { pct: prog.percent.toFixed(1), dl: fmtMb(prog.downloaded_bytes), total: prog.total_bytes > 0 ? ` / ${fmtMb(prog.total_bytes)}` : "" })}
                   </div>
                   <div style={{ height: 6, background: "#232936", borderRadius: 4, overflow: "hidden" }}>
                     <div
@@ -179,19 +179,19 @@ export const ModelManagerModal: React.FC<Props> = ({
                   disabled={busyId !== null || !currentUrl}
                   onClick={() => handleDownload(m.id)}
                 >
-                  <Download size={13} /> {busyId === m.id ? "处理中..." : m.installed ? "重新下载" : "在线下载"}
+                  <Download size={13} /> {busyId === m.id ? t("models.busy") : m.installed ? t("models.redownload") : t("models.download")}
                 </button>
                 <button
                   className={`btn btn-sm ${!m.direct_download_ready ? "btn-primary" : ""}`}
                   disabled={busyId !== null}
                   onClick={() => handleImportLocal(m.id)}
-                  title="选择本地 .onnx 模型文件"
+                  title={t("models.importTip")}
                 >
-                  <FolderOpen size={13} /> 从本地导入 .onnx
+                  <FolderOpen size={13} /> {t("models.import")}
                 </button>
                 {m.installed && (
                   <button className="btn btn-sm" onClick={() => handleDelete(m.id)}>
-                    <Trash2 size={13} /> 删除缓存
+                    <Trash2 size={13} /> {t("models.delete")}
                   </button>
                 )}
               </div>

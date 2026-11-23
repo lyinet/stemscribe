@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { t } from "../../i18n";
 import { Pause, Play, Repeat, SkipBack, Square, Timer, TrendingUp } from "lucide-react";
 
 interface Props {
@@ -81,39 +82,39 @@ export const TransportBar: React.FC<Props> = ({
   return (
     <div className="transport">
       <div className="tp-pill">
-        <button className="tp-btn" disabled={!canPlay} onClick={onRewind} title="回到开头">
+        <button className="tp-btn" disabled={!canPlay} onClick={onRewind} title={t("transport.rewind")}>
           <SkipBack size={15} />
         </button>
         <button
           className={`tp-btn tp-play ${isPlaying ? "on" : ""}`}
           disabled={!canPlay}
           onClick={onTogglePlay}
-          title="播放 / 暂停 (空格)"
+          title={t("transport.playPause")}
         >
           {isPlaying ? <Pause size={16} /> : <Play size={16} />}
         </button>
-        <button className="tp-btn" disabled={!canPlay} onClick={onStop} title="停止并回到开头">
+        <button className="tp-btn" disabled={!canPlay} onClick={onStop} title={t("transport.stop")}>
           <Square size={13} />
         </button>
         <button
           className={`tp-btn ${loopEnabled ? "on" : ""}`}
           disabled={!canPlay}
           onClick={onToggleLoop}
-          title="A-B 循环（在时间尺上拖动即可框选循环区）"
+          title={t("transport.loopTip")}
         >
           <Repeat size={15} />
         </button>
       </div>
 
       <div className="lcd-display">
-        <div className="lcd-seg" title="当前位置 · 小节.拍">
+        <div className="lcd-seg" title={t("transport.positionTip")}>
           <div className="lcd-main">{formatClock(currentTime)}</div>
           <div className="lcd-sub">
             <span>{formatBarBeat(currentTime, bpm)}</span>
             <span className="lcd-dim">/ {formatClock(durationSec)}</span>
           </div>
         </div>
-        <div className="lcd-seg lcd-seg-center" title="速度 (BPM)，点击数字可修改">
+        <div className="lcd-seg lcd-seg-center" title={t("transport.bpmTip")}>
           {editingBpm === null ? (
             <button className="lcd-value" onClick={() => setEditingBpm(String(bpm))}>
               {bpm.toFixed(bpm % 1 === 0 ? 0 : 1)}
@@ -133,20 +134,20 @@ export const TransportBar: React.FC<Props> = ({
           )}
           <div className="lcd-label">
             BPM
-            <button className="lcd-link" onClick={onTapTempo} title="跟着节奏连续点击测速">
+            <button className="lcd-link" onClick={onTapTempo} title={t("transport.tapTip")}>
               Tap
             </button>
           </div>
         </div>
-        <div className="lcd-seg lcd-seg-center" title="自动识别的调性">
+        <div className="lcd-seg lcd-seg-center" title={t("transport.keyTip")}>
           <div className="lcd-value">{keyLabel ?? "—"}</div>
           <div className="lcd-label">Key</div>
         </div>
       </div>
 
       <div className="tp-controls">
-        <label className="tp-field" title="练习变速（不变调）">
-          <span>速度</span>
+        <label className="tp-field" title={t("transport.rateTip")}>
+          <span>{t("transport.rate")}</span>
           <select value={playbackRate} onChange={(e) => onRateChange(Number(e.target.value))}>
             {RATES.map((r) => (
               <option key={r} value={r}>
@@ -155,8 +156,8 @@ export const TransportBar: React.FC<Props> = ({
             ))}
           </select>
         </label>
-        <div className="tp-field" title="移调（半音）">
-          <span>移调</span>
+        <div className="tp-field" title={t("transport.transposeTip")}>
+          <span>{t("transport.transpose")}</span>
           <button className="tp-mini" onClick={() => onTransposeChange(Math.max(-6, transposeSemitones - 1))}>
             −
           </button>
@@ -168,20 +169,20 @@ export const TransportBar: React.FC<Props> = ({
       </div>
 
       <div className="tp-controls">
-        <button className={`tp-btn ${metronomeEnabled ? "on" : ""}`} onClick={onToggleMetronome} title="节拍器">
+        <button className={`tp-btn ${metronomeEnabled ? "on" : ""}`} onClick={onToggleMetronome} title={t("transport.metronome")}>
           <Timer size={15} />
         </button>
         <button
           className={`tp-btn tp-text ${countInEnabled ? "on" : ""}`}
           onClick={onToggleCountIn}
-          title="播放前先数 4 拍预备"
+          title={t("transport.countInTip")}
         >
           1234
         </button>
         <button
           className={`tp-btn ${progressiveRampEnabled ? "on" : ""}`}
           onClick={onToggleProgressiveRamp}
-          title="渐进提速：每循环一次自动提速 5%，直到原速"
+          title={t("transport.rampTip")}
         >
           <TrendingUp size={15} />
         </button>

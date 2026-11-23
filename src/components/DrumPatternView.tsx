@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Drum, Sparkles, Trash2 } from "lucide-react";
+import { t } from "../i18n";
 import type { DrumHit } from "../types/music";
 
 interface Props {
@@ -117,9 +118,9 @@ export const DrumPatternView: React.FC<Props> = ({
       : -1;
 
   const rows: Array<{ kind: "hihat" | "snare" | "kick"; label: string; color: string }> = [
-    { kind: "hihat", label: "踩镲 (HH)", color: "#f59e0b" },
-    { kind: "snare", label: "军鼓 (SD)", color: "#3b82f6" },
-    { kind: "kick", label: "底鼓 (BD)", color: "#f43f5e" },
+    { kind: "hihat", label: t("drum.hh"), color: "#f59e0b" },
+    { kind: "snare", label: t("drum.sd"), color: "#3b82f6" },
+    { kind: "kick", label: t("drum.bd"), color: "#f43f5e" },
   ];
 
   const activeCells = new Set<string>();
@@ -211,9 +212,9 @@ export const DrumPatternView: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header" style={{ flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title" title="16 步鼓机编辑器 (BD / SD / HH)">
-          <Drum size={14} /> 鼓组
-          {hits.length > 0 && <span className="badge">{hits.length} 打击点</span>}
+        <div className="card-title" title={t("drum.titleTip")}>
+          <Drum size={14} /> {t("drum.title")}
+          {hits.length > 0 && <span className="badge">{t("drum.hitCount", { count: hits.length })}</span>}
         </div>
         <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
           <div className="row" style={{ gap: 4 }}>
@@ -221,18 +222,18 @@ export const DrumPatternView: React.FC<Props> = ({
               className="btn btn-sm"
               disabled={safeBar <= 0}
               onClick={() => setBarIndex((b) => Math.max(0, b - 1))}
-              title="上一小节"
+              title={t("drum.prevBar")}
             >
               <ChevronLeft size={12} />
             </button>
             <span className="muted" style={{ fontSize: 11.5, minWidth: 68, textAlign: "center" }}>
-              第 {safeBar + 1} / {totalBars} 小节
+              {t("drum.bar", { n: safeBar + 1, total: totalBars })}
             </span>
             <button
               className="btn btn-sm"
               disabled={safeBar >= totalBars - 1}
               onClick={() => setBarIndex((b) => Math.min(totalBars - 1, b + 1))}
-              title="下一小节"
+              title={t("drum.nextBar")}
             >
               <ChevronRight size={12} />
             </button>
@@ -242,24 +243,24 @@ export const DrumPatternView: React.FC<Props> = ({
             disabled={!hasDrumStem || loading}
             onClick={onDetectDrums}
           >
-            {loading ? "识别中..." : "识别鼓组节奏"}
+            {loading ? t("drum.detecting") : t("drum.detect")}
           </button>
-          <button className="btn btn-sm" onClick={clearCurrentBar} title="清空当前小节鼓点">
-            <Trash2 size={12} /> 清空本节
+          <button className="btn btn-sm" onClick={clearCurrentBar} title={t("drum.clearTip")}>
+            <Trash2 size={12} /> {t("drum.clear")}
           </button>
           <button
             className="btn btn-sm btn-primary"
             disabled={hits.length === 0}
             onClick={onExportDrumMidi}
           >
-            <Download size={12} /> 导出鼓组 .mid
+            <Download size={12} /> {t("drum.export")}
           </button>
         </div>
       </div>
 
       <div className="row" style={{ marginBottom: 10, flexWrap: "wrap", gap: 6 }}>
         <Sparkles size={12} color="#a855f7" />
-        <span className="muted" style={{ fontSize: 11.5 }}>本小节一键律动模板：</span>
+        <span className="muted" style={{ fontSize: 11.5 }}>{t("drum.grooves")}</span>
         {GROOVE_PRESETS.map((p) => (
           <button
             key={p.id}
@@ -270,7 +271,7 @@ export const DrumPatternView: React.FC<Props> = ({
           </button>
         ))}
         <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
-          点击任意步进格开关鼓点并实时试听
+          {t("drum.cellHint")}
         </span>
       </div>
 
@@ -289,7 +290,7 @@ export const DrumPatternView: React.FC<Props> = ({
               className="btn btn-sm"
               style={{ justifyContent: "flex-start", padding: "3px 6px", fontSize: 11 }}
               onClick={() => audition(r.kind)}
-              title={`点击试听${r.label}`}
+              title={t("drum.auditionTip", { label: r.label })}
             >
               {r.label}
             </button>
@@ -300,7 +301,7 @@ export const DrumPatternView: React.FC<Props> = ({
                 <button
                   key={step}
                   onClick={() => toggleCell(r.kind, step)}
-                  title={`第 ${safeBar + 1} 小节 Step ${step + 1} · 点击开关`}
+                  title={t("drum.cellTip", { bar: safeBar + 1, step: step + 1 })}
                   style={{
                     height: 22,
                     borderRadius: 4,

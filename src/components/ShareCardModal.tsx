@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Download, Share2, X } from "lucide-react";
+import { t, useLanguage } from "../i18n";
 import { recommendCapoFrets, transposeChordSymbol } from "../lib/musicTheory";
 import type { ChordEvent, KeyEstimate, SongStructureSegment } from "../types/music";
 
@@ -34,6 +35,7 @@ export const ShareCardModal: React.FC<Props> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [aspect, setAspect] = useState<CardAspect>("portrait_4_5");
+  const lang = useLanguage();
 
   useEffect(() => {
     if (!open || !canvasRef.current) return;
@@ -65,7 +67,7 @@ export const ShareCardModal: React.FC<Props> = ({
     ctx.fillRect(72, 68, 360, 44);
     ctx.fillStyle = "#93c5fd";
     ctx.font = "600 22px -apple-system, BlinkMacSystemFont, PingFang SC, sans-serif";
-    ctx.fillText("STEMSCRIBE · AI 扒带战报卡片", 92, 98);
+    ctx.fillText(t("share.cardTitle"), 92, 98);
 
     // Song title
     ctx.fillStyle = "#f8fafc";
@@ -76,9 +78,9 @@ export const ShareCardModal: React.FC<Props> = ({
     // Metadata pills
     const topCapo = recommendCapoFrets(chords, transposeSemitones, useFlats)[0];
     const metaLine = [
-      `调性 ${keyEst?.label ?? "待识别"}`,
+      t("share.key", { key: keyEst?.label ?? t("share.keyTbd") }),
       `${bpm.toFixed(0)} BPM`,
-      capoFret > 0 ? `变调夹 ${capoFret} 品` : topCapo ? topCapo.label : "原调",
+      capoFret > 0 ? t("capo.atFret", { fret: capoFret }) : topCapo ? topCapo.label : t("share.originalKey"),
     ].join("   ·   ");
     ctx.fillStyle = "#cbd5e1";
     ctx.font = "500 26px -apple-system, BlinkMacSystemFont, PingFang SC, sans-serif";
@@ -92,7 +94,7 @@ export const ShareCardModal: React.FC<Props> = ({
     ctx.lineWidth = 2;
     ctx.strokeRect(72, scoreY, W - 144, 180);
 
-    const acc = scoreSummary && scoreSummary.accuracyPct > 0 ? `${scoreSummary.accuracyPct.toFixed(1)}%` : "待测试";
+    const acc = scoreSummary && scoreSummary.accuracyPct > 0 ? `${scoreSummary.accuracyPct.toFixed(1)}%` : t("share.untested");
     const rank = scoreSummary && scoreSummary.accuracyPct > 0 ? scoreSummary.rank : "★";
     const combo = scoreSummary ? `${scoreSummary.maxCombo}` : "0";
 
@@ -102,21 +104,21 @@ export const ShareCardModal: React.FC<Props> = ({
 
     ctx.fillStyle = "#94a3b8";
     ctx.font = "500 22px -apple-system, PingFang SC, sans-serif";
-    ctx.fillText("音准命中率", 270, scoreY + 64);
-    ctx.fillText("最高连击", 530, scoreY + 64);
-    ctx.fillText("曲式段落", 740, scoreY + 64);
+    ctx.fillText(t("share.accuracy"), 270, scoreY + 64);
+    ctx.fillText(t("share.combo"), 530, scoreY + 64);
+    ctx.fillText(t("share.sections"), 740, scoreY + 64);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "700 42px -apple-system, sans-serif";
     ctx.fillText(acc, 270, scoreY + 124);
     ctx.fillText(combo, 530, scoreY + 124);
-    ctx.fillText(`${structure.length} 段`, 740, scoreY + 124);
+    ctx.fillText(t("share.segCount", { count: structure.length }), 740, scoreY + 124);
 
     // Chord Progression Grid
     const chordY = 530;
     ctx.fillStyle = "#93c5fd";
     ctx.font = "600 26px -apple-system, PingFang SC, sans-serif";
-    ctx.fillText("核心和弦进行" + (capoFret > 0 ? `（变调夹 ${capoFret} 品指法）` : ""), 72, chordY);
+    ctx.fillText(t("share.chords") + (capoFret > 0 ? t("share.capoSuffix", { fret: capoFret }) : ""), 72, chordY);
 
     const uniqueChords = chords.slice(0, aspect === "portrait_4_5" ? 12 : 8);
     const cols = 4;
@@ -146,8 +148,8 @@ export const ShareCardModal: React.FC<Props> = ({
     // Footer branding
     ctx.fillStyle = "#64748b";
     ctx.font = "500 22px -apple-system, PingFang SC, sans-serif";
-    ctx.fillText("Powered by StemScribe for macOS (Apple Silicon CoreML) · 4 轨分轨 / 自动扒谱 / 演出提词", 72, H - 54);
-  }, [open, aspect, songName, bpm, keyEst, transposeSemitones, capoFret, chords, structure, scoreSummary]);
+    ctx.fillText(t("share.footer"), 72, H - 54);
+  }, [open, aspect, songName, bpm, keyEst, transposeSemitones, capoFret, chords, structure, scoreSummary, lang]);
 
   if (!open) return null;
 
@@ -180,7 +182,7 @@ export const ShareCardModal: React.FC<Props> = ({
       >
         <div className="card-header">
           <div className="card-title">
-            <Share2 size={15} /> 一键生成扒带 / 练琴分享卡片（小红书 / B 站适配）
+            <Share2 size={15} /> {t("share.title")}
           </div>
           <button className="btn btn-sm" onClick={onClose}>
             <X size={14} />
@@ -193,18 +195,18 @@ export const ShareCardModal: React.FC<Props> = ({
               className={`btn btn-sm ${aspect === "portrait_4_5" ? "btn-active" : ""}`}
               onClick={() => setAspect("portrait_4_5")}
             >
-              4:5 竖屏（小红书/朋友圈）
+              {t("share.portrait")}
             </button>
             <button
               className={`btn btn-sm ${aspect === "landscape_16_9" ? "btn-active" : ""}`}
               onClick={() => setAspect("landscape_16_9")}
             >
-              16:9 横屏（B 站/YouTube 封面）
+              {t("share.landscape")}
             </button>
           </div>
 
           <button className="btn btn-primary btn-sm" onClick={handleDownloadPng}>
-            <Download size={13} /> 导出高清 PNG
+            <Download size={13} /> {t("share.export")}
           </button>
         </div>
 

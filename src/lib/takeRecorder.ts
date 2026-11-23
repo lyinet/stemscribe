@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export interface RecordedTake {
   id: string;
   label: string;
@@ -64,7 +66,7 @@ export class OverdubTakeRecorder {
 
   public async start(): Promise<void> {
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error("当前环境不支持麦克风录音");
+      throw new Error(t("mic.recordUnsupported"));
     }
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
@@ -81,7 +83,7 @@ export class OverdubTakeRecorder {
   public async stop(label: string, playbackRate: number): Promise<RecordedTake> {
     return new Promise((resolve, reject) => {
       if (!this.mediaRecorder) {
-        reject(new Error("当前没有进行中的录音"));
+        reject(new Error(t("mic.noActiveRecording")));
         return;
       }
       const rec = this.mediaRecorder;

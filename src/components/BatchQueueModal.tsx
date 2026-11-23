@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { FolderOutput, ListMusic, Play, Plus, X } from "lucide-react";
+import { t } from "../i18n";
 import {
   onBatchJobProgress,
   pickAudioFilesMultiple,
@@ -82,7 +83,7 @@ export const BatchQueueModal: React.FC<Props> = ({ open, onClose }) => {
       <div className="card" style={{ width: 640, maxWidth: "92vw" }}>
         <div className="card-header">
           <div className="card-title">
-            <ListMusic size={15} /> 多曲目批量分轨与转谱队列
+            <ListMusic size={15} /> {t("batch.title")}
           </div>
           <button className="btn btn-sm" onClick={onClose}>
             <X size={14} />
@@ -91,10 +92,10 @@ export const BatchQueueModal: React.FC<Props> = ({ open, onClose }) => {
 
         <div className="row" style={{ marginBottom: 10 }}>
           <button className="btn btn-sm" onClick={handleAddFiles} disabled={running}>
-            <Plus size={13} /> 添加音频文件
+            <Plus size={13} /> {t("batch.addFiles")}
           </button>
           <button className="btn btn-sm" onClick={handlePickDir} disabled={running}>
-            <FolderOutput size={13} /> 输出目录: {outputDir}
+            <FolderOutput size={13} /> {t("batch.outDir", { dir: outputDir })}
           </button>
         </div>
 
@@ -105,7 +106,7 @@ export const BatchQueueModal: React.FC<Props> = ({ open, onClose }) => {
               checked={exportMidi}
               onChange={(e) => setExportMidi(e.target.checked)}
             />
-            自动转人声 MIDI
+            {t("batch.autoMidi")}
           </label>
           <label className="row" style={{ cursor: "pointer" }}>
             <input
@@ -113,14 +114,14 @@ export const BatchQueueModal: React.FC<Props> = ({ open, onClose }) => {
               checked={exportChords}
               onChange={(e) => setExportChords(e.target.checked)}
             />
-            自动导出和弦 JSON
+            {t("batch.autoChords")}
           </label>
         </div>
 
         <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
           {files.length === 0 ? (
             <div className="muted" style={{ padding: "18px 0", textAlign: "center" }}>
-              点击「添加音频文件」可一次导入多首歌曲，在 Apple Silicon 上全自动顺序分轨并输出独立文件夹。
+              {t("batch.empty")}
             </div>
           ) : (
             files.map((f, idx) => {
@@ -129,7 +130,7 @@ export const BatchQueueModal: React.FC<Props> = ({ open, onClose }) => {
                 <div key={f} className="section-pill" style={{ display: "flex", justifyContent: "space-between" }}>
                   <span>{f.split("/").pop()}</span>
                   <span className="muted">
-                    {ev ? `[${ev.status}] ${ev.message}` : "等待执行"}
+                    {ev ? `[${ev.status}] ${ev.message}` : t("batch.pending")}
                   </span>
                 </div>
               );
@@ -140,15 +141,15 @@ export const BatchQueueModal: React.FC<Props> = ({ open, onClose }) => {
         <div className="row" style={{ justifyContent: "space-between" }}>
           <span className="muted">
             {summary
-              ? `批量完成：成功 ${summary.succeeded}/${summary.total}，失败 ${summary.failed}`
-              : `队列中共有 ${files.length} 首音频`}
+              ? t("batch.done", { ok: summary.succeeded, total: summary.total, failed: summary.failed })
+              : t("batch.count", { count: files.length })}
           </span>
           <button
             className="btn btn-primary"
             disabled={files.length === 0 || running}
             onClick={handleRun}
           >
-            <Play size={14} /> {running ? "批量处理中..." : "开始批量队列"}
+            <Play size={14} /> {running ? t("batch.running") : t("batch.run")}
           </button>
         </div>
       </div>
