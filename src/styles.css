@@ -2269,6 +2269,80 @@ input[type="range"]:not(.eq-fader):disabled::-webkit-slider-thumb {
   align-self: flex-start;
 }
 
+.rp-runrow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rp-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.rp-card {
+  text-align: left;
+  background: var(--panel-2, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+  color: var(--text-1);
+  font: inherit;
+}
+
+.rp-card:hover {
+  border-color: var(--accent);
+}
+
+.rp-card.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.rp-card.warn {
+  border-color: var(--rose);
+}
+
+.rp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.rp-card-name {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.rp-badge {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.rp-badge.warn {
+  background: var(--rose);
+}
+
+.rp-card-row {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+.rp-cards-note {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
 .rp-progress {
   display: flex;
   align-items: center;

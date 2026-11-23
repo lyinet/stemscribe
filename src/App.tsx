@@ -32,6 +32,7 @@ import { DiagnosticsModal } from "./components/DiagnosticsModal";
 import { DrumPatternView } from "./components/DrumPatternView";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FallingNotesView } from "./components/FallingNotesView";
+import { ImportStemsModal } from "./components/ImportStemsModal";
 import { LeadSheetModal } from "./components/LeadSheetModal";
 import { LiveInstrumentView } from "./components/LiveInstrumentView";
 import { LyricsTimeline } from "./components/LyricsTimeline";
@@ -94,6 +95,9 @@ import {
   onNativeFileDrop,
   onRestoreProgress,
   pickAudioFile,
+  pickAudioFilesMultiple,
+  guessStemRoles,
+  importStemsAsMix,
   pickDirectory,
   pickHtmlSavePath,
   pickLrcOpenPath,
@@ -107,6 +111,7 @@ import {
   refineMidiWithLlm,
   reharmonizeChordsLocal,
   restoreAudio,
+  restoreCompare,
   savePracticeRecord,
   deleteProjectFile,
   renameProjectFile,
@@ -145,6 +150,8 @@ import type {
   RestoreProgress,
   RestoreResult,
   RestoreSettings,
+  CompareResult,
+  ImportStemSpec,
 } from "./types/music";
 import { DEFAULT_RESTORE_SETTINGS } from "./types/music";
 
@@ -308,6 +315,9 @@ export const App: React.FC = () => {
   const [restoring, setRestoring] = useState(false);
   const [restoreProgress, setRestoreProgress] = useState<RestoreProgress | null>(null);
   const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null);
+  const [compareResult, setCompareResult] = useState<CompareResult | null>(null);
+  const [compareSel, setCompareSel] = useState(0);
+  const [importStemsDraft, setImportStemsDraft] = useState<{ paths: string[]; roles: string[] } | null>(null);
   const [restoreSettings, setRestoreSettings] = useState<RestoreSettings>(DEFAULT_RESTORE_SETTINGS);
   const [qualityBefore, setQualityBefore] = useState<QualityReport | null>(null);
   const [autoPipelining, setAutoPipelining] = useState(false);
@@ -1114,6 +1124,9 @@ export const App: React.FC = () => {
         case "import_midi":
           handleImportMidi();
           break;
+        case "import_stems":
+          handleImportStemsRef.current();
+          break;
         case "open_command_palette":
           setShowCommandPalette((v) => !v);
           break;
@@ -1525,6 +1538,27 @@ export const App: React.FC = () => {
     }
   };
 
+  /** Offer AI separation when no stems exist (imported or separated). */
+  const ensureStemsForRestore = async (): Promise<StemOutput[]> => {
+    let useStems = stems;
+    if (useStems.length === 0) {
+      const yes = await askConfirm(
+        "先用 AI 分轨再修复，效果更好（耗时约为歌曲时长的一半到三分之二）。要先分轨吗？",
+        "一键修复"
+      );
+      if (yes && audioMeta && (await ensureModelInstalled("demucs"))) {
+        setSeparating(true);
+        setStatusMsg("正在 AI 4 轨分离（耗时约为歌曲时长的一半到三分之二）...");
+        try {
+          useStems = await performSeparation(audioMeta.file_path);
+        } finally {
+          setSeparating(false);
+        }
+      }
+    }
+    return useStems;
+  };
+
   const handleRestore = async () => {
     if (!audioMeta || restoring) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
@@ -1534,35 +1568,22 @@ export const App: React.FC = () => {
     setStudioTab("restore");
     setEditorOpen(true);
     try {
-      let before = qualityBefore;
-      if (!before) {
+      if (!qualityBefore) {
         setStatusMsg("音质诊断中…");
-        before = await analyzeAudioQuality(audioMeta.file_path);
-        setQualityBefore(before);
+        setQualityBefore(await analyzeAudioQuality(audioMeta.file_path));
       }
-      let useStems = stems;
-      if (useStems.length === 0) {
-        const yes = await askConfirm(
-          "先用 AI 分轨再修复，效果更好（耗时约为歌曲时长的一半到三分之二）。要先分轨吗？",
-          "一键修复"
-        );
-        if (yes && (await ensureModelInstalled("demucs"))) {
-          setSeparating(true);
-          setStatusMsg("正在 AI 4 轨分离（耗时约为歌曲时长的一半到三分之二）...");
-          try {
-            useStems = await performSeparation(audioMeta.file_path);
-          } finally {
-            setSeparating(false);
-          }
-        }
-      }
+      const useStems = await ensureStemsForRestore();
       setRestoring(true);
       setRestoreProgress({ stage: "analyze", percent: 0 });
       const unlisten = await onRestoreProgress(setRestoreProgress);
       try {
         const res = await restoreAudio({
           source_path: audioMeta.file_path,
-          stems: useStems.map((s) => ({ name: s.name, file_path: s.file_path })),
+          stems: useStems.map((s) => ({
+            name: s.name,
+            file_path: s.file_path,
+            role: s.role ?? "",
+          })),
           settings: restoreSettings,
           output_path: null,
         });
@@ -1583,6 +1604,128 @@ export const App: React.FC = () => {
 
   const handleRestoreRef = useRef(handleRestore);
   handleRestoreRef.current = handleRestore;
+
+  const candidateAsResult = useCallback(
+    (cmp: CompareResult, i: number): RestoreResult => {
+      const c = cmp.candidates[i];
+      return {
+        output_path: c.output_path,
+        sample_rate: c.after.sample_rate,
+        bit_depth: restoreSettings.bit_depth,
+        before: cmp.before,
+        after: c.after,
+        loudness_match_db:
+          cmp.before.integrated_lufs - c.after.integrated_lufs,
+        limiter_avg_gr_db: 0,
+        notes: c.notes,
+        elapsed_ms: cmp.elapsed_ms,
+        reference: null,
+        objective: c.objective,
+        critic: c.critic ?? null,
+        critic_before: cmp.critic_before ?? null,
+      };
+    },
+    [restoreSettings.bit_depth]
+  );
+
+  const handleSelectCompare = useCallback(
+    (i: number) => {
+      setCompareSel(i);
+      if (compareResult) setRestoreResult(candidateAsResult(compareResult, i));
+    },
+    [compareResult, candidateAsResult]
+  );
+
+  const handleRestoreCompare = async () => {
+    if (!audioMeta || restoring) return;
+    if (isDemoBlobPath(audioMeta.file_path)) {
+      setStatusMsg("演示曲不支持修复，请导入自己的歌曲。");
+      return;
+    }
+    setStudioTab("restore");
+    setEditorOpen(true);
+    try {
+      if (!qualityBefore) {
+        setStatusMsg("音质诊断中…");
+        setQualityBefore(await analyzeAudioQuality(audioMeta.file_path));
+      }
+      const useStems = await ensureStemsForRestore();
+      setRestoring(true);
+      setRestoreProgress({ stage: "compare_light", percent: 0 });
+      const unlisten = await onRestoreProgress(setRestoreProgress);
+      try {
+        const cmp = await restoreCompare({
+          source_path: audioMeta.file_path,
+          stems: useStems.map((s) => ({
+            name: s.name,
+            file_path: s.file_path,
+            role: s.role ?? "",
+          })),
+          settings: restoreSettings,
+          output_path: null,
+        });
+        setCompareResult(cmp);
+        setCompareSel(cmp.recommended);
+        setRestoreResult(candidateAsResult(cmp, cmp.recommended));
+        setQualityBefore(cmp.before);
+        setStatusMsg(
+          `三档对比完成：推荐${cmp.candidates[cmp.recommended].strength_label}档（${cmp.reason}）`
+        );
+      } finally {
+        unlisten();
+        setRestoring(false);
+        setRestoreProgress(null);
+      }
+    } catch (err) {
+      setRestoring(false);
+      setRestoreProgress(null);
+      setStatusMsg(`三档对比失败: ${String(err)}`);
+    }
+  };
+
+  const handleImportStems = async () => {
+    try {
+      const paths = await pickAudioFilesMultiple();
+      if (paths.length === 0) return;
+      const roles = await guessStemRoles(paths);
+      setImportStemsDraft({ paths, roles });
+    } catch (err) {
+      setStatusMsg(`选择分轨失败: ${String(err)}`);
+    }
+  };
+  const handleImportStemsRef = useRef(handleImportStems);
+  handleImportStemsRef.current = handleImportStems;
+
+  const confirmImportStems = async (
+    rows: ImportStemSpec[],
+    mixPath: string | null
+  ) => {
+    setImportStemsDraft(null);
+    setStatusMsg("正在导入分轨…");
+    try {
+      const imp = await importStemsAsMix(rows, mixPath);
+      await loadAudioByPath(imp.mix_path);
+      setStems(imp.stems);
+      setRestoreResult(null);
+      setCompareResult(null);
+      const initMixer: Record<string, StemMixerState> = {};
+      for (const s of imp.stems) {
+        initMixer[s.name] = { muted: false, solo: false, gain: 1.0, pan: 0 };
+      }
+      setMixer(initMixer);
+      engineRef.current?.loadStems(imp.stems, (t) => setCurrentTime(t));
+      engineRef.current?.applyMixer(initMixer);
+      setStudioTab("restore");
+      setEditorOpen(true);
+      setStatusMsg(
+        imp.notes.length > 0
+          ? imp.notes.join("；")
+          : `已导入 ${imp.stems.length} 条分轨`
+      );
+    } catch (err) {
+      setStatusMsg(`导入分轨失败: ${String(err)}`);
+    }
+  };
 
   const handleExportRestored = async (bitDepth: 24 | 16) => {
     if (!restoreResult) return;
@@ -2132,6 +2275,9 @@ export const App: React.FC = () => {
                   <button className="btn btn-lg" onClick={handleLoadDemoSong}>
                     <Sparkles size={16} /> 试试演示曲
                   </button>
+                  <button className="btn btn-lg" onClick={handleImportStems}>
+                    <Music size={16} /> 导入分轨（Suno 等）
+                  </button>
                   <button className="btn btn-lg" onClick={handleImportMidi}>
                     <Music size={16} /> 导入 MIDI
                   </button>
@@ -2190,6 +2336,10 @@ export const App: React.FC = () => {
               running={restoring}
               progress={restoreProgress}
               onRun={handleRestore}
+              onRunCompare={handleRestoreCompare}
+              compareResult={compareResult}
+              compareSel={compareSel}
+              onSelectCompare={handleSelectCompare}
               onExport={handleExportRestored}
               sourcePath={
                 audioMeta && !isDemoBlobPath(audioMeta.file_path) ? audioMeta.file_path : null
@@ -2575,6 +2725,15 @@ export const App: React.FC = () => {
       <CommandPaletteModal open={showCommandPalette} commands={paletteCommands} onClose={() => setShowCommandPalette(false)} />
 
       <ShortcutsModal open={showShortcutsModal} onClose={() => setShowShortcutsModal(false)} />
+
+      {importStemsDraft && (
+        <ImportStemsModal
+          paths={importStemsDraft.paths}
+          roles={importStemsDraft.roles}
+          onConfirm={confirmImportStems}
+          onCancel={() => setImportStemsDraft(null)}
+        />
+      )}
     </div>
   );
 };

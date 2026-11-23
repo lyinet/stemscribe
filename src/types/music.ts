@@ -105,6 +105,7 @@ export interface ModelStatus {
   demucs_installed: boolean;
   demucs_ft_vocals_installed: boolean;
   basic_pitch_installed: boolean;
+  critic_installed: boolean;
   coreml_enabled: boolean;
 }
 
@@ -147,6 +148,8 @@ export interface StemOutput {
   file_path: string;
   waveform_peaks: number[];
   duration_sec: number;
+  /** Engine role: lead/backing/drums/perc/bass/other (absent = derive). */
+  role?: string | null;
 }
 
 export interface StemMixerState {
@@ -303,6 +306,20 @@ export interface HarshPeak {
   excess_db: number;
 }
 
+export interface CriticWindowScore {
+  start_sec: number;
+  pq: number;
+}
+
+export interface CriticScore {
+  ce: number;
+  cu: number;
+  pc: number;
+  pq: number;
+  duration_sec: number;
+  windows: CriticWindowScore[];
+}
+
 export interface QualityReport {
   sample_rate: number;
   channels: number;
@@ -330,6 +347,8 @@ export interface QualityReport {
 export interface RestoreStemIn {
   name: string;
   file_path: string;
+  /** lead/backing/drums/perc/bass/other; empty = derive from name. */
+  role?: string;
 }
 
 export interface RestoreModules {
@@ -389,6 +408,55 @@ export interface RestoreResult {
   notes: string[];
   elapsed_ms: number;
   reference?: ReferenceInfo | null;
+  objective?: ObjectiveScore | null;
+  critic?: CriticScore | null;
+  critic_before?: CriticScore | null;
+}
+
+export interface ObjectiveTerm {
+  name: string;
+  value: number;
+}
+
+/** Rule-based restoration score (lower = better) with term breakdown. */
+export interface ObjectiveScore {
+  score: number;
+  terms: ObjectiveTerm[];
+}
+
+export interface CompareCandidate {
+  strength: number;
+  strength_label: string;
+  output_path: string;
+  after: QualityReport;
+  objective: ObjectiveScore;
+  critic?: CriticScore | null;
+  notes: string[];
+  warning?: string | null;
+}
+
+export interface CompareResult {
+  before: QualityReport;
+  candidates: CompareCandidate[];
+  /** index into candidates */
+  recommended: number;
+  reason: string;
+  critic_before?: CriticScore | null;
+  elapsed_ms: number;
+}
+
+export interface ImportStemSpec {
+  file_path: string;
+  role?: string;
+}
+
+export interface ImportedStems {
+  mix_path: string;
+  mix_is_synth: boolean;
+  stems: StemOutput[];
+  notes: string[];
+  duration_sec: number;
+  sample_rate: number;
 }
 
 export type RestoreStage =
@@ -397,7 +465,10 @@ export type RestoreStage =
   | "master"
   | "limit"
   | "write"
-  | "report";
+  | "report"
+  | "compare_light"
+  | "compare_standard"
+  | "compare_strong";
 
 export interface RestoreProgress {
   stage: RestoreStage;

@@ -10,6 +10,7 @@ pub mod reharmonize;
 pub mod resample;
 pub mod refmatch;
 pub mod restore;
+pub mod stem_import;
 pub mod structure;
 pub mod takes;
 

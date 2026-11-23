@@ -32,12 +32,15 @@ const BASIC_PITCH_URL: &str =
     "https://github.com/spotify/basic-pitch/raw/main/basic_pitch/saved_models/icassp_2022/nmp.onnx";
 const HTDEMUCS_URL: &str = "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/main/htdemucs_fp16weights.onnx";
 const HTDEMUCS_FT_VOCALS_URL: &str = "https://huggingface.co/StemSplitio/htdemucs-ft-onnx/resolve/main/htdemucs_ft_vocals_fp16weights.onnx";
+const AUDIOBOX_AES_URL: &str =
+    "https://huggingface.co/Microck/audiobox-aesthetics-onnx/resolve/main/aes.int8.onnx";
 
 fn default_url(model_id: &str) -> &'static str {
     match model_id {
         "basic_pitch" => BASIC_PITCH_URL,
         "htdemucs" => HTDEMUCS_URL,
         "htdemucs_ft_vocals" => HTDEMUCS_FT_VOCALS_URL,
+        "audiobox_aes" => AUDIOBOX_AES_URL,
         _ => "",
     }
 }
@@ -67,6 +70,7 @@ fn resolve_model_filename(model_id: &str) -> Result<&'static str> {
         "basic_pitch" => Ok("basic_pitch.onnx"),
         "htdemucs" => Ok("htdemucs.onnx"),
         "htdemucs_ft_vocals" => Ok("htdemucs_ft_vocals.onnx"),
+        "audiobox_aes" => Ok("audiobox_aes.onnx"),
         other => Err(anyhow!("未知模型 ID: {other}")),
     }
 }
@@ -96,6 +100,14 @@ pub fn list_models() -> Result<Vec<ModelItemInfo>> {
             "htdemucs_ft_vocals.onnx",
             HTDEMUCS_FT_VOCALS_URL,
             "人声分离更干净，分轨时间约为标准的 2 倍。",
+            true,
+        ),
+        (
+            "audiobox_aes",
+            "Audiobox 音质评委（可选）",
+            "audiobox_aes.onnx",
+            AUDIOBOX_AES_URL,
+            "本地给音质打分（Meta，CC-BY 4.0），约 126 MB。",
             true,
         ),
     ];

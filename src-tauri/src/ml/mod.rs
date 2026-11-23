@@ -15,6 +15,7 @@ pub struct ModelStatus {
     pub demucs_installed: bool,
     pub demucs_ft_vocals_installed: bool,
     pub basic_pitch_installed: bool,
+    pub critic_installed: bool,
     pub coreml_enabled: bool,
 }
 
@@ -37,6 +38,10 @@ pub fn basic_pitch_model_path() -> Result<PathBuf> {
     Ok(models_dir()?.join("basic_pitch.onnx"))
 }
 
+pub fn audiobox_aes_model_path() -> Result<PathBuf> {
+    Ok(models_dir()?.join("audiobox_aes.onnx"))
+}
+
 pub fn check_model_status() -> Result<ModelStatus> {
     let dir = models_dir()?;
     Ok(ModelStatus {
@@ -44,6 +49,7 @@ pub fn check_model_status() -> Result<ModelStatus> {
         demucs_installed: demucs_model_path()?.exists(),
         demucs_ft_vocals_installed: demucs_ft_vocals_model_path()?.exists(),
         basic_pitch_installed: basic_pitch_model_path()?.exists(),
+        critic_installed: audiobox_aes_model_path()?.exists(),
         coreml_enabled: cfg!(target_os = "macos"),
     })
 }

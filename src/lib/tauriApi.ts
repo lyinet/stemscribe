@@ -9,6 +9,7 @@ import type {
   BatchJobSummary,
   BatchProgressEvent,
   ChordEvent,
+  CriticScore,
   DownloadProgressEvent,
   DrumHit,
   HardwareMidiEvent,
@@ -37,6 +38,9 @@ import type {
   RestoreProgress,
   RestoreRequest,
   RestoreResult,
+  CompareResult,
+  ImportedStems,
+  ImportStemSpec,
   TranscriptionResult,
 } from "../types/music";
 
@@ -305,6 +309,20 @@ export async function analyzeAudioQuality(filePath: string): Promise<QualityRepo
   return invoke<QualityReport>("analyze_audio_quality", { filePath });
 }
 
+export async function scoreAudioQuality(filePath: string): Promise<CriticScore> {
+  if (!isTauriRuntime()) {
+    return {
+      ce: 7.12,
+      cu: 7.35,
+      pc: 5.08,
+      pq: 7.81,
+      duration_sec: 242.0,
+      windows: [{ start_sec: 0, pq: 7.81 }],
+    };
+  }
+  return invoke<CriticScore>("score_audio_quality", { filePath });
+}
+
 export async function saveRecordedTakeWav(
   songName: string,
   label: string,
@@ -510,6 +528,7 @@ export async function getModelStatus(): Promise<ModelStatus> {
       demucs_installed: false,
       demucs_ft_vocals_installed: false,
       basic_pitch_installed: false,
+      critic_installed: false,
       coreml_enabled: true,
     };
   }
@@ -550,6 +569,17 @@ export async function listOnnxModels(): Promise<ModelItemInfo[]> {
         default_url:
           "https://huggingface.co/StemSplitio/htdemucs-ft-onnx/resolve/main/htdemucs_ft_vocals_fp16weights.onnx",
         recommended_source_hint: "人声分离更干净，分轨时间约为标准的 2 倍。",
+        direct_download_ready: true,
+        installed: false,
+        size_bytes: 0,
+      },
+      {
+        id: "audiobox_aes",
+        display_name: "Audiobox 音质评委（可选）",
+        file_name: "audiobox_aes.onnx",
+        default_url:
+          "https://huggingface.co/Microck/audiobox-aesthetics-onnx/resolve/main/aes.int8.onnx",
+        recommended_source_hint: "本地给音质打分（Meta，CC-BY 4.0），约 126 MB。",
         direct_download_ready: true,
         installed: false,
         size_bytes: 0,
@@ -852,9 +882,90 @@ export async function restoreAudio(
             distance_after_db: 1.12,
           }
         : null,
+      objective: {
+        score: 1.35,
+        terms: [
+          { name: "issues", value: 1.0 },
+          { name: "harsh", value: 0.0 },
+          { name: "low_mid", value: 0.0 },
+          { name: "lra", value: 0.0 },
+          { name: "tp", value: 0.0 },
+          { name: "lufs", value: 0.35 },
+        ],
+      },
+      critic: null,
+      critic_before: null,
     };
   }
   return invoke<RestoreResult>("restore_audio", { request });
+}
+
+export async function restoreCompare(
+  request: RestoreRequest,
+): Promise<CompareResult> {
+  if (!isTauriRuntime()) {
+    const mk = (
+      strength: number,
+      strength_label: string,
+      s: number,
+      issues: number,
+    ) => ({
+      strength,
+      strength_label,
+      output_path: `/tmp/mock_${strength_label}.wav`,
+      after: { ...MOCK_QUALITY_AFTER },
+      objective: { score: s, terms: [] },
+      critic: null,
+      notes: issues > 0 ? ["浏览器演示模式"] : [],
+      warning: null,
+    });
+    return {
+      before: MOCK_QUALITY_BEFORE,
+      candidates: [
+        mk(0.5, "轻", 1.9, 1),
+        mk(1.0, "标准", 1.3, 0),
+        mk(1.5, "重", 1.4, 0),
+      ],
+      recommended: 1,
+      reason: "标准档评分最低（S=1.3），已满足要求",
+      critic_before: null,
+      elapsed_ms: 98000,
+    };
+  }
+  return invoke<CompareResult>("restore_compare", { request });
+}
+
+export async function guessStemRoles(filePaths: string[]): Promise<string[]> {
+  if (!isTauriRuntime()) {
+    return filePaths.map((p) =>
+      /vocal|vox|人声|主唱/i.test(p) ? "lead" : /drum|鼓/i.test(p) ? "drums" : "other",
+    );
+  }
+  return invoke<string[]>("guess_stem_roles", { filePaths });
+}
+
+export async function importStemsAsMix(
+  stems: ImportStemSpec[],
+  mixPath?: string | null,
+): Promise<ImportedStems> {
+  if (!isTauriRuntime()) {
+    return {
+      mix_path: "/tmp/mock_mix.wav",
+      mix_is_synth: true,
+      stems: stems.map((s, i) => ({
+        name: `stem${i}`,
+        label_zh: "其他",
+        file_path: s.file_path,
+        waveform_peaks: [],
+        duration_sec: 180,
+        role: s.role ?? "other",
+      })),
+      notes: ["浏览器演示模式"],
+      duration_sec: 180,
+      sample_rate: 48000,
+    };
+  }
+  return invoke<ImportedStems>("import_stems_as_mix", { stems, mixPath });
 }
 
 export function onRestoreProgress(

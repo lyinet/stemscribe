@@ -23,6 +23,8 @@ pub fn setup_macos_menu<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
     let import_midi = MenuItemBuilder::with_id("import_midi", "导入 MIDI 乐谱 (.mid)...")
         .accelerator("CmdOrCtrl+I")
         .build(app)?;
+    let import_stems = MenuItemBuilder::with_id("import_stems", "导入分轨（Suno 等）...")
+        .build(app)?;
     let load_demo = MenuItemBuilder::with_id("load_demo_song", "体验内置 4 轨演示曲")
         .accelerator("CmdOrCtrl+D")
         .build(app)?;
@@ -51,6 +53,7 @@ pub fn setup_macos_menu<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
 
     let file_menu = SubmenuBuilder::new(app, "文件")
         .item(&open_audio)
+        .item(&import_stems)
         .item(&import_midi)
         .item(&load_demo)
         .item(&open_setlist)

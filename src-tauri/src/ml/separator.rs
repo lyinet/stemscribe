@@ -23,6 +23,9 @@ pub struct StemOutput {
     pub file_path: String,
     pub waveform_peaks: Vec<f32>,
     pub duration_sec: f64,
+    /// Engine role: lead/backing/drums/perc/bass/other (None = derive).
+    #[serde(default)]
+    pub role: Option<String>,
 }
 
 fn stem_label_zh(name: &str) -> &'static str {
@@ -120,6 +123,12 @@ pub fn run_separation(
             file_path: stem_file.to_string_lossy().to_string(),
             waveform_peaks: peaks,
             duration_sec,
+            role: Some(match *stem_name {
+                "vocals" => "lead".to_string(),
+                "drums" => "drums".to_string(),
+                "bass" => "bass".to_string(),
+                _ => "other".to_string(),
+            }),
         });
     }
 

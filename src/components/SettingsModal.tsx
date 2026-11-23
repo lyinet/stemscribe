@@ -252,6 +252,13 @@ export const SettingsModal: React.FC<Props> = ({
                       {modelStatus?.basic_pitch_installed ? "已安装" : "未安装"}
                     </b>
                   </div>
+                  <div className="status-item">
+                    <HardDrive size={15} />
+                    <span>Audiobox 音质评委</span>
+                    <b className={modelStatus?.critic_installed ? "ok" : "warn"}>
+                      {modelStatus?.critic_installed ? "已安装" : "未安装"}
+                    </b>
+                  </div>
                 </div>
                 <Field label="高质量分轨">
                   <label className="row" style={{ gap: 8 }}>

@@ -113,6 +113,16 @@ async fn analyze_audio_quality(file_path: String) -> Result<audio::quality::Qual
 }
 
 #[tauri::command]
+async fn score_audio_quality(
+    file_path: String,
+) -> Result<audio::quality::critic::CriticScore, String> {
+    tokio::task::spawn_blocking(move || audio::quality::critic::score_audio(&file_path))
+        .await
+        .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn restore_audio(
     app: AppHandle,
     request: audio::restore::RestoreRequest,
@@ -125,6 +135,49 @@ async fn restore_audio(
                 serde_json::json!({ "stage": stage, "percent": percent }),
             );
         })
+    })
+    .await
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn restore_compare(
+    app: AppHandle,
+    request: audio::restore::RestoreRequest,
+) -> Result<audio::restore::CompareResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let app2 = app.clone();
+        audio::restore::run_restore_compare(&request, move |stage, percent| {
+            let _ = app2.emit(
+                "restore-progress",
+                serde_json::json!({ "stage": stage, "percent": percent }),
+            );
+        })
+    })
+    .await
+    .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
+    .map_err(|e| e.to_string())
+}
+
+/// Infer import roles for a list of file paths (for the confirm dialog).
+#[tauri::command]
+fn guess_stem_roles(file_paths: Vec<String>) -> Vec<String> {
+    file_paths
+        .iter()
+        .map(|p| audio::restore::guess_stem_role(p).to_string())
+        .collect()
+}
+
+/// Import a stem set (+ optional mix): resample to 48 kHz, sum to a mix
+/// (or sanity-check a provided mix), return stems with roles.
+#[tauri::command]
+async fn import_stems_as_mix(
+    stems: Vec<audio::stem_import::ImportStemSpec>,
+    mix_path: Option<String>,
+) -> Result<audio::stem_import::ImportedStems, String> {
+    tokio::task::spawn_blocking(move || {
+        audio::stem_import::import_stems(&stems, mix_path.as_deref())
     })
     .await
     .map_err(|e| format!("后台任务异常终止（已写入崩溃日志）: {e}"))?
@@ -621,7 +674,11 @@ pub fn run() {
             export_audio_slice_wav,
             export_mixed_wav,
             analyze_audio_quality,
+            score_audio_quality,
             restore_audio,
+            restore_compare,
+            guess_stem_roles,
+            import_stems_as_mix,
             export_restored_wav,
             save_recorded_take_wav,
             mix_take_with_stems_wav,

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Download, Eye, Pause, Play, Sparkles, X } from "lucide-react";
 import { pickAudioFile, resolveAudioUrl } from "../../lib/tauriApi";
 import type {
+  CompareResult,
   QualityIssue,
   QualityReport,
   RestoreProgress,
@@ -17,6 +18,10 @@ interface Props {
   running: boolean;
   progress: RestoreProgress | null;
   onRun: () => void;
+  onRunCompare: () => void;
+  compareResult: CompareResult | null;
+  compareSel: number;
+  onSelectCompare: (i: number) => void;
   onExport: (bitDepth: 24 | 16) => void;
   sourcePath: string | null;
   sourceDuration: number;
@@ -31,6 +36,9 @@ const STAGE_LABELS: Record<string, string> = {
   limit: "限幅",
   write: "写盘",
   report: "报告",
+  compare_light: "对比 · 轻档",
+  compare_standard: "对比 · 标准档",
+  compare_strong: "对比 · 重档",
 };
 
 const MODULE_LABELS: Array<{ key: keyof RestoreSettings["modules"]; label: string }> = [
@@ -285,6 +293,10 @@ export const RestorePanel: React.FC<Props> = ({
   running,
   progress,
   onRun,
+  onRunCompare,
+  compareResult,
+  compareSel,
+  onSelectCompare,
   onExport,
   sourcePath,
   sourceDuration,
@@ -438,6 +450,26 @@ export const RestorePanel: React.FC<Props> = ({
               },
             ]
           : []),
+        ...(result?.objective
+          ? [
+              {
+                label: "规则评分",
+                before: "—",
+                after: `S = ${result.objective.score.toFixed(2)}`,
+              },
+            ]
+          : []),
+        ...(result?.critic
+          ? [
+              {
+                label: "AI 评分 PQ",
+                before: result.critic_before
+                  ? result.critic_before.pq.toFixed(2)
+                  : "—",
+                after: result.critic.pq.toFixed(2),
+              },
+            ]
+          : []),
       ]
     : [];
 
@@ -573,9 +605,49 @@ export const RestorePanel: React.FC<Props> = ({
               ))}
             </div>
           </div>
-          <button className="btn btn-primary rp-run" disabled={running} onClick={onRun}>
-            <Sparkles size={13} /> {running ? "修复中…" : result ? "重新修复" : "开始修复"}
-          </button>
+          <div className="rp-runrow">
+            <button className="btn btn-primary rp-run" disabled={running} onClick={onRun}>
+              <Sparkles size={13} /> {running ? "修复中…" : result ? "重新修复" : "开始修复"}
+            </button>
+            <button className="btn rp-run" disabled={running} onClick={onRunCompare}>
+              {running ? "对比中…" : "三档对比"}
+            </button>
+          </div>
+          {compareResult && compareResult.candidates.length > 0 && (
+            <div className="rp-cards">
+              {compareResult.candidates.map((c, i) => (
+                <button
+                  key={i}
+                  className={`rp-card${i === compareSel ? " on" : ""}${c.warning ? " warn" : ""}`}
+                  onClick={() => onSelectCompare(i)}
+                  title={c.warning ?? undefined}
+                >
+                  <div className="rp-card-head">
+                    <span className="rp-card-name">{c.strength_label}档</span>
+                    {i === compareResult.recommended && (
+                      <span className="rp-badge">推荐</span>
+                    )}
+                    {c.warning && <span className="rp-badge warn">⚠</span>}
+                  </div>
+                  <div className="rp-card-row">
+                    问题 {c.after.issues.filter((x) => x.severity !== "ok").length} 个
+                  </div>
+                  <div className="rp-card-row">
+                    动态 {compareResult.before.lra_lu.toFixed(1)}→{c.after.lra_lu.toFixed(1)} LU
+                  </div>
+                  <div className="rp-card-row">
+                    评分 {c.objective.score.toFixed(2)}
+                  </div>
+                  <div className="rp-card-row">
+                    AI PQ {c.critic ? c.critic.pq.toFixed(2) : "—"}
+                  </div>
+                </button>
+              ))}
+              <div className="rp-cards-note">
+                {compareResult.reason} · AI 评分差 &lt; 0.1 视为无差别
+              </div>
+            </div>
+          )}
           {(running || progress) && (
             <div className="rp-progress">
               <div className="rp-progress-bar">

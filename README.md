@@ -192,6 +192,7 @@ Suno、MiniMax 这些 AI 生成的歌，旋律和编曲已经很好听，但一�
 | HTDemucs（4 轨） | 人声 / 鼓 / 贝斯 / 伴奏分离 | 约 166 MB | [Meta Demucs](https://github.com/facebookresearch/demucs) · [ONNX 版](https://huggingface.co/StemSplitio/htdemucs-onnx) | MIT |
 | Basic Pitch | 音频转 MIDI | 约 230 KB | [Spotify Basic Pitch](https://github.com/spotify/basic-pitch) | Apache-2.0 |
 | HTDemucs-FT 人声专家（可选） | 高质量分轨：人声更干净，分轨时间约 2 倍 | 约 166 MB | [Meta Demucs](https://github.com/facebookresearch/demucs) · [ONNX 版](https://huggingface.co/StemSplitio/htdemucs-ft-onnx) | MIT |
+| Audiobox 音质评委（可选） | 本地给音质打分（CE / CU / PC / PQ） | 约 126 MB | [Audiobox Aesthetics © Meta](https://github.com/facebookresearch/audiobox-aesthetics) · [ONNX 版](https://huggingface.co/Microck/audiobox-aesthetics-onnx) | CC-BY 4.0（部分代码来自 Microsoft WavLM，MIT） |
 
 模型保存在 `~/Library/Application Support/StemScribe/models/`，下载一次后完全离线可用。网络受限时，可以用浏览器下载后在模型管理器里「从本地导入 .onnx」。
 
@@ -287,6 +288,9 @@ npm run build:mac      # 打包 .app 与 .dmg（Apple Silicon）
 - [x] **v0.11 参考曲匹配**：选一首你喜欢的歌，把频响、响度、立体声宽度往它靠
 - [x] **v0.11 鼓替换（实验性）**：识别底鼓 / 军鼓，叠加真实鼓采样（CC0 授权）
 - [x] **v0.12 高质量分轨（可选）**：HTDemucs-FT 人声专家，人声更干净；评估 Apollo / UniverSR / BS-RoFormer 后暂不接入（适用性或许可证原因，见 v0.12 发布说明）
+- [x] **v0.13 三档对比推荐 + 导入官方分轨（Suno 等）+ AI 音质评分（参考）**
+- [ ] **v0.14 AI 参谋**：读诊断数据和你的文字要求（如「人声再亮一点」），给出有范围限制的修复方案和白话解释
+- [ ] **v0.15 多轮自动修复（实验性）**：AI 调参 → 渲染 → 评分 → 再调，始终保留最好的一版
 - [x] 经典 DAW 界面：走带 / 多轨编排 / 底部编辑器 / 独立设置页
 - [x] 本地 HTDemucs 4 轨分离 + Basic Pitch 扒谱，模型一键下载与校验
 - [x] 和弦 / 调性 / BPM / 段落识别，和弦风格重配
@@ -341,6 +345,8 @@ StemScribe 站在这些优秀开源项目的肩膀上：
 [Lucide](https://github.com/lucide-icons/lucide)
 
 鼓替换采样来自 [Big Rusty Drums](https://github.com/sfzinstruments/karoryfer.big-rusty-drums)（Karoryfer Samples, [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/)）。
+
+音质评分模型为 [Audiobox Aesthetics](https://github.com/facebookresearch/audiobox-aesthetics) © Meta（[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)，部分代码来自 Microsoft WavLM，MIT），ONNX 导出见 [Microck/audiobox-aesthetics-onnx](https://huggingface.co/Microck/audiobox-aesthetics-onnx)。
 
 ## License
 
