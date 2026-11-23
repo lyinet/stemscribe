@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -57,6 +58,11 @@ export function isTauriRuntime(): boolean {
 export async function askConfirm(message: string, title = "StemScribe"): Promise<boolean> {
   if (!isTauriRuntime()) return window.confirm(message);
   return ask(message, { title, kind: "info" });
+}
+
+export async function setMenuLanguage(lang: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  await invoke("set_menu_language", { lang });
 }
 
 export function resolveAudioUrl(filePath: string): string {
@@ -231,7 +237,7 @@ export async function reharmonizeChordsLocal(
     return {
       style,
       style_label_zh: style,
-      description: "预览模式已应用和弦风格变奏",
+      description: t("mock.chordPreview"),
       chords: transformed,
     };
   }
@@ -243,7 +249,7 @@ export async function detectKeyLocal(filePath: string): Promise<KeyEstimate> {
     return {
       tonic: "C",
       mode: "major",
-      label: "C 大调 (Major)",
+      label: t("demo.key"),
       confidence: 0.92,
       scale_pitch_classes: [0, 2, 4, 5, 7, 9, 11],
     };
@@ -256,10 +262,10 @@ export async function detectSongStructureLocal(
 ): Promise<SongStructureSegment[]> {
   if (!isTauriRuntime()) {
     return [
-      { id: "sec_0", label: "前奏 Intro", kind: "intro", start_sec: 0, end_sec: 4, energy: 0.35 },
-      { id: "sec_1", label: "主歌 Verse", kind: "verse", start_sec: 4, end_sec: 8, energy: 0.62 },
-      { id: "sec_2", label: "副歌 Chorus", kind: "chorus", start_sec: 8, end_sec: 12, energy: 0.94 },
-      { id: "sec_3", label: "尾奏 Outro", kind: "outro", start_sec: 12, end_sec: 16, energy: 0.4 },
+      { id: "sec_0", label: t("demo.seg.intro"), kind: "intro", start_sec: 0, end_sec: 4, energy: 0.35 },
+      { id: "sec_1", label: t("demo.seg.verse"), kind: "verse", start_sec: 4, end_sec: 8, energy: 0.62 },
+      { id: "sec_2", label: t("demo.seg.chorus"), kind: "chorus", start_sec: 8, end_sec: 12, energy: 0.94 },
+      { id: "sec_3", label: t("demo.seg.outro"), kind: "outro", start_sec: 12, end_sec: 16, energy: 0.4 },
     ];
   }
   return invoke<SongStructureSegment[]>("detect_song_structure_local", { filePath });
@@ -546,46 +552,46 @@ export async function listOnnxModels(): Promise<ModelItemInfo[]> {
     return [
       {
         id: "basic_pitch",
-        display_name: "Basic Pitch (音频转 MIDI)",
+        display_name: t("mock.m.bp"),
         file_name: "basic_pitch.onnx",
         default_url:
           "https://github.com/spotify/basic-pitch/raw/main/basic_pitch/saved_models/icassp_2022/nmp.onnx",
         recommended_source_hint:
-          "Spotify 官方 Basic Pitch 模型（约 230 KB），可一键下载或离线导入。",
+          t("mock.m.bpDesc"),
         direct_download_ready: true,
         installed: false,
         size_bytes: 0,
       },
       {
         id: "htdemucs",
-        display_name: "HTDemucs 4-Stem (人声/鼓/贝斯/伴奏)",
+        display_name: t("mock.m.htd"),
         file_name: "htdemucs.onnx",
         default_url:
           "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/main/htdemucs_fp16weights.onnx",
         recommended_source_hint:
-          "Meta HTDemucs 4 轨分离模型 ONNX 版（约 166 MB），可一键下载，也可填入镜像地址或离线导入。",
+          t("mock.m.htdDesc"),
         direct_download_ready: true,
         installed: false,
         size_bytes: 0,
       },
       {
         id: "htdemucs_ft_vocals",
-        display_name: "HTDemucs-FT 人声专家（高质量分轨，可选）",
+        display_name: t("mock.m.htdFt"),
         file_name: "htdemucs_ft_vocals.onnx",
         default_url:
           "https://huggingface.co/StemSplitio/htdemucs-ft-onnx/resolve/main/htdemucs_ft_vocals_fp16weights.onnx",
-        recommended_source_hint: "人声分离更干净，分轨时间约为标准的 2 倍。",
+        recommended_source_hint: t("mock.m.htdFtHint"),
         direct_download_ready: true,
         installed: false,
         size_bytes: 0,
       },
       {
         id: "audiobox_aes",
-        display_name: "Audiobox 音质评委（可选）",
+        display_name: t("mock.m.critic"),
         file_name: "audiobox_aes.onnx",
         default_url:
           "https://huggingface.co/Microck/audiobox-aesthetics-onnx/resolve/main/aes.int8.onnx",
-        recommended_source_hint: "本地给音质打分（Meta，CC-BY 4.0），约 126 MB。",
+        recommended_source_hint: t("mock.m.criticHint"),
         direct_download_ready: true,
         installed: false,
         size_bytes: 0,
@@ -597,7 +603,7 @@ export async function listOnnxModels(): Promise<ModelItemInfo[]> {
 
 export async function downloadOnnxModel(modelId: string, customUrl: string): Promise<string> {
   if (!isTauriRuntime()) {
-    return `预览模式：请在 macOS 桌面端执行下载 (${modelId})`;
+    return t("mock.previewDownload", { id: modelId });
   }
   return invoke<string>("download_onnx_model", { modelId, customUrl });
 }
@@ -625,10 +631,10 @@ export async function separateStems(
 ): Promise<StemOutput[]> {
   if (!isTauriRuntime()) {
     const names: Array<[string, string]> = [
-      ["vocals", "人声"],
-      ["drums", "鼓组"],
-      ["bass", "贝斯"],
-      ["other", "伴奏/其他"],
+      ["vocals", t("demo.stem.vocals")],
+      ["drums", t("demo.stem.drums")],
+      ["bass", t("demo.stem.bass")],
+      ["other", t("demo.stem.other")],
     ];
     return names.map(([name, label_zh], idx) => ({
       name,
@@ -772,7 +778,7 @@ export async function saveProjectFile(project: StemScribeProject): Promise<strin
 export async function loadProjectFile(projectId: string): Promise<StemScribeProject> {
   if (!isTauriRuntime()) {
     const raw = localStorage.getItem(`stemscribe_proj_${projectId}`);
-    if (!raw) throw new Error("未找到本地预览工程");
+    if (!raw) throw new Error(t("mock.noProject"));
     return JSON.parse(raw);
   }
   return invoke<StemScribeProject>("load_project_file", { projectId });
@@ -825,7 +831,7 @@ export async function renameProjectFile(
 
 export async function testLlmRelayConnection(config: LlmRelayConfig): Promise<string> {
   if (!isTauriRuntime()) {
-    return `预览模式模拟连通 (${config.protocol} · ${config.model})`;
+    return t("mock.previewConnect", { proto: config.protocol, model: config.model });
   }
   return invoke<string>("test_llm_relay_connection", { config });
 }
@@ -870,9 +876,9 @@ export async function restoreAudio(
   request: RestoreRequest,
 ): Promise<RestoreResult> {
   if (!isTauriRuntime()) {
-    const notes = ["浏览器演示模式，展示真实诊断数据（东北的东）"];
+    const notes = [t("mock.diagNote")];
     if (request.settings.modules?.drum_replace) {
-      notes.push("叠加真实鼓：底鼓 120/190、军鼓 260/608");
+      notes.push(t("mock.diagDrums"));
     }
     return {
       output_path: "/tmp/mock_restored.wav",
@@ -927,18 +933,18 @@ export async function restoreCompare(
       after: { ...MOCK_QUALITY_AFTER },
       objective: { score: s, terms: [] },
       critic: null,
-      notes: issues > 0 ? ["浏览器演示模式"] : [],
+      notes: issues > 0 ? [t("mock.browserDemo")] : [],
       warning: null,
     });
     return {
       before: MOCK_QUALITY_BEFORE,
       candidates: [
-        mk(0.5, "轻", 1.9, 1),
-        mk(1.0, "标准", 1.3, 0),
-        mk(1.5, "重", 1.4, 0),
+        mk(0.5, t("mock.strength.light"), 1.9, 1),
+        mk(1.0, t("mock.strength.standard"), 1.3, 0),
+        mk(1.5, t("mock.strength.heavy"), 1.4, 0),
       ],
       recommended: 1,
-      reason: "标准档评分最低（S=1.3），已满足要求",
+      reason: t("mock.strengthReason"),
       critic_before: null,
       elapsed_ms: 98000,
     };
@@ -961,25 +967,25 @@ export async function adviseRestoration(
       changes: [
         {
           field: "vocal_presence_db",
-          label_zh: "人声清晰度",
+          label_zh: t("mock.f.vocalPresence"),
           from: cur.vocal_presence_db,
           to: merged.vocal_presence_db,
         },
-        { field: "glue", label_zh: "母带粘合", from: cur.modules.glue, to: 0.8 },
+        { field: "glue", label_zh: t("mock.f.glue"), from: cur.modules.glue, to: 0.8 },
         {
           field: "low_shelf_db",
-          label_zh: "整体低频",
+          label_zh: t("mock.f.lowShelf"),
           from: cur.low_shelf_db,
           to: merged.low_shelf_db,
         },
       ],
       explanation: [
-        "按你的要求「人声再亮一点」，人声 3.5 kHz 清晰度提高 1.5 dB；诊断里没有人声刺耳峰，提升是安全的",
-        "整体动态偏平，把母带粘合降到 0.8 减少过度压缩感",
-        "低频略有轰感，整体低频架 −1 dB",
+        t("mock.plan.note1"),
+        t("mock.plan.note2"),
+        t("mock.plan.note3"),
       ],
       confidence: "medium",
-      warnings: ["浏览器演示模式：这是示例方案，不是真实 AI 返回"],
+      warnings: [t("mock.planWarning")],
       raw: "{}",
     };
   }
@@ -1019,28 +1025,28 @@ export async function restoreAgent(
       best: { ...bestResult, output_path: "/tmp/mock_agent_r1.wav" },
       best_round: 1,
       history: [
-        mkRecord(0, 3.1, true, null, [], ["基线：当前参数渲染"]),
+        mkRecord(0, 3.1, true, null, [], [t("mock.baseline")]),
         mkRecord(
           1,
           0.9,
           true,
           null,
           [
-            { field: "vocal_presence_db", label_zh: "人声清晰度", from: 0, to: 1.5 },
-            { field: "low_shelf_db", label_zh: "整体低频", from: 0, to: -1 },
+            { field: "vocal_presence_db", label_zh: t("mock.f.vocalPresence"), from: 0, to: 1.5 },
+            { field: "low_shelf_db", label_zh: t("mock.f.lowShelf"), from: 0, to: -1 },
           ],
-          ["3.6 kHz 刺耳峰压制后人声偏闷，清晰度 +1.5", "低频架 −1 dB 减少轰感"],
+          [t("mock.delta.note1"), t("mock.delta.note2")],
         ),
         mkRecord(
           2,
           1.4,
           false,
-          "动态被压平（LRA 4.3 → 3.1 LU）",
+          t("mock.delta.warn"),
           [
-            { field: "strength", label_zh: "整体强度", from: 1, to: 1.5 },
-            { field: "glue", label_zh: "母带粘合", from: 1, to: 1.5 },
+            { field: "strength", label_zh: t("mock.f.strength"), from: 1, to: 1.5 },
+            { field: "glue", label_zh: t("mock.f.glue"), from: 1, to: 1.5 },
           ],
-          ["尝试更强处理"],
+          [t("mock.delta.note3")],
         ),
       ],
       stop_reason: "no_improvement",
@@ -1086,13 +1092,13 @@ export async function importStemsAsMix(
       mix_is_synth: true,
       stems: stems.map((s, i) => ({
         name: `stem${i}`,
-        label_zh: "其他",
+        label_zh: t("mock.f.other"),
         file_path: s.file_path,
         waveform_peaks: [],
         duration_sec: 180,
         role: s.role ?? "other",
       })),
-      notes: ["浏览器演示模式"],
+      notes: [t("mock.browserDemo")],
       duration_sec: 180,
       sample_rate: 48000,
     };

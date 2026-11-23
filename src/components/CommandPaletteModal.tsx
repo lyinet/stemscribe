@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Command, Search, X } from "lucide-react";
+import { t } from "../i18n";
 
 export interface PaletteCommand {
   id: string;
@@ -107,7 +108,7 @@ export const CommandPaletteModal: React.FC<Props> = ({ open, commands, onClose }
             ref={inputRef}
             className="input"
             style={{ border: "none", background: "transparent", padding: "4px 6px", fontSize: 14 }}
-            placeholder="搜索任意功能、视图、导出或主题（如：瀑布流、弹唱谱、MIDI、爵士）..."
+            placeholder={t("palette.placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -122,7 +123,7 @@ export const CommandPaletteModal: React.FC<Props> = ({ open, commands, onClose }
         <div style={{ maxHeight: 380, overflowY: "auto", padding: 8 }}>
           {filtered.length === 0 ? (
             <div className="muted" style={{ padding: "18px 12px", textAlign: "center" }}>
-              未找到匹配命令，试试搜索「演示曲」「弹唱谱」「混响」或「主题」
+              {t("palette.noMatch")}
             </div>
           ) : (
             filtered.map((cmd, idx) => (

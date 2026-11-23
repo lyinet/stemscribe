@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "../../i18n";
 import {
   Bookmark,
   Layers,
@@ -296,24 +297,24 @@ export const Arrangement: React.FC<Props> = ({
         <div className="arr-content" style={{ width: HEADER_W + laneW }}>
           <div className="arr-row arr-ruler-row">
             <div className="arr-head arr-corner">
-              <span className="arr-corner-title">轨道</span>
+              <span className="arr-corner-title">{t("arr.tracks")}</span>
               <div className="arr-zoom">
                 <button
                   className="icon-btn"
                   disabled={zoomIdx === 0}
                   onClick={() => setZoomIdx((z) => Math.max(0, z - 1))}
-                  title="缩小"
+                  title={t("arr.zoomOut")}
                 >
                   <ZoomOut size={13} />
                 </button>
-                <button className="icon-btn" disabled={zoomIdx === 0} onClick={() => setZoomIdx(0)} title="适合窗口">
+                <button className="icon-btn" disabled={zoomIdx === 0} onClick={() => setZoomIdx(0)} title={t("arr.fit")}>
                   <Maximize size={12} />
                 </button>
                 <button
                   className="icon-btn"
                   disabled={zoomIdx === ZOOM_LEVELS.length - 1}
                   onClick={() => setZoomIdx((z) => Math.min(ZOOM_LEVELS.length - 1, z + 1))}
-                  title="放大"
+                  title={t("arr.zoomIn")}
                 >
                   <ZoomIn size={13} />
                 </button>
@@ -323,7 +324,7 @@ export const Arrangement: React.FC<Props> = ({
               className="arr-lane arr-ruler"
               style={{ width: laneW }}
               onMouseDown={handleRulerMouseDown}
-              title="点击跳转 · 拖动框选循环区"
+              title={t("arr.rulerTip")}
             >
               {showLoop && <div className="ruler-loop" style={{ left: x(loopA), width: x(loopB) - x(loopA) }} />}
               {rulerTicks.map((t, i) => (
@@ -337,13 +338,13 @@ export const Arrangement: React.FC<Props> = ({
 
           <div className="arr-row arr-meta-row">
             <div className="arr-head meta-head">
-              <span className="meta-title">段落</span>
+              <span className="meta-title">{t("arr.sections")}</span>
               <div className="meta-actions">
                 <button
                   className="icon-btn"
                   disabled={!durationSec || detectingStructure}
                   onClick={onDetectStructure}
-                  title="自动识别前奏 / 主歌 / 副歌"
+                  title={t("arr.autoSeg")}
                 >
                   {detectingStructure ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
                 </button>
@@ -351,7 +352,7 @@ export const Arrangement: React.FC<Props> = ({
                   className="icon-btn"
                   disabled={structure.length === 0}
                   onClick={onConvertStructureToMarkers}
-                  title="全部转为书签"
+                  title={t("arr.allMarkers")}
                 >
                   <Bookmark size={13} />
                 </button>
@@ -371,7 +372,7 @@ export const Arrangement: React.FC<Props> = ({
                       borderColor: `${color}99`,
                       color,
                     }}
-                    title={`${seg.label} · 单击跳转，双击循环本段`}
+                    title={t("arr.segTip", { label: seg.label })}
                     onClick={() => onSeek(seg.start_sec)}
                     onDoubleClick={() => onSetLoop(seg.start_sec, seg.end_sec)}
                   >
@@ -384,17 +385,17 @@ export const Arrangement: React.FC<Props> = ({
 
           <div className="arr-row arr-meta-row">
             <div className="arr-head meta-head">
-              <span className="meta-title">和弦</span>
+              <span className="meta-title">{t("arr.chords")}</span>
               <div className="meta-actions">
                 <button
                   className="icon-btn"
                   disabled={!durationSec || detectingChords}
                   onClick={onDetectChords}
-                  title="自动识别和弦"
+                  title={t("arr.autoChord")}
                 >
                   {detectingChords ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
                 </button>
-                <button className="icon-btn" onClick={onOpenChordEditor} title="打开和弦编辑器">
+                <button className="icon-btn" onClick={onOpenChordEditor} title={t("arr.chordEditor")}>
                   <Pencil size={12} />
                 </button>
               </div>
@@ -420,9 +421,9 @@ export const Arrangement: React.FC<Props> = ({
 
           <div className="arr-row arr-meta-row small">
             <div className="arr-head meta-head">
-              <span className="meta-title">书签</span>
+              <span className="meta-title">{t("arr.markers")}</span>
               <div className="meta-actions">
-                <button className="icon-btn" disabled={!durationSec} onClick={onAddMarker} title="在播放位置加书签 (K)">
+                <button className="icon-btn" disabled={!durationSec} onClick={onAddMarker} title={t("arr.addMarker")}>
                   <Plus size={13} />
                 </button>
               </div>
@@ -435,7 +436,7 @@ export const Arrangement: React.FC<Props> = ({
                     key={m.id}
                     className="marker-flag"
                     style={{ left: x(m.time_sec) }}
-                    title={`${m.label} · 单击跳转，双击循环到下一个书签`}
+                    title={t("arr.markerTip", { label: m.label })}
                     onClick={() => onSeek(m.time_sec)}
                     onDoubleClick={() => onSetLoop(m.time_sec, next)}
                   >
@@ -455,27 +456,27 @@ export const Arrangement: React.FC<Props> = ({
             </div>
           </div>
 
-          {tracks.map((t) => {
-            const st = mixer[t.id] ?? { muted: false, solo: false, gain: 1, pan: 0 };
+          {tracks.map((trk) => {
+            const st = mixer[trk.id] ?? { muted: false, solo: false, gain: 1, pan: 0 };
             return (
-              <div key={t.id} className="arr-row arr-track-row">
-                <div className="arr-head track-head" style={{ ["--track-color" as string]: t.color }}>
+              <div key={trk.id} className="arr-row arr-track-row">
+                <div className="arr-head track-head" style={{ ["--track-color" as string]: trk.color }}>
                   <div className="track-title">
-                    <span className="track-name">{t.name}</span>
-                    <span className="track-sub">{t.subtitle}</span>
+                    <span className="track-name">{trk.name}</span>
+                    <span className="track-sub">{trk.subtitle}</span>
                   </div>
                   <div className="track-controls">
                     <button
                       className={`ms-btn ${st.muted ? "mute-on" : ""}`}
-                      onClick={() => onMixerChange(t.id, { muted: !st.muted })}
-                      title="静音"
+                      onClick={() => onMixerChange(trk.id, { muted: !st.muted })}
+                      title={t("arr.mute")}
                     >
                       {st.muted ? <VolumeX size={11} /> : "M"}
                     </button>
                     <button
                       className={`ms-btn ${st.solo ? "solo-on" : ""}`}
-                      onClick={() => onMixerChange(t.id, { solo: !st.solo })}
-                      title="独奏"
+                      onClick={() => onMixerChange(trk.id, { solo: !st.solo })}
+                      title={t("arr.solo")}
                     >
                       S
                     </button>
@@ -487,26 +488,26 @@ export const Arrangement: React.FC<Props> = ({
                       max={1}
                       step={0.01}
                       value={st.gain}
-                      onChange={(e) => onMixerChange(t.id, { gain: Number(e.target.value) })}
-                      title={`音量 ${Math.round(st.gain * 100)}%`}
+                      onChange={(e) => onMixerChange(trk.id, { gain: Number(e.target.value) })}
+                      title={t("arr.vol", { pct: Math.round(st.gain * 100) })}
                     />
-                    {t.isOriginal ? (
+                    {trk.isOriginal ? (
                       <button
                         className={`track-action ${separating ? "busy" : ""}`}
                         disabled={separating}
                         onClick={onSeparate}
-                        title="用 AI 分离成 人声 / 鼓 / 贝斯 / 其他 4 轨"
+                        title={t("arr.separateTip")}
                       >
                         {separating ? <Loader2 size={12} className="spin" /> : <Layers size={12} />}
                       </button>
                     ) : (
                       <button
-                        className={`track-action ${transcribingStem === t.id ? "busy" : ""}`}
+                        className={`track-action ${transcribingStem === trk.id ? "busy" : ""}`}
                         disabled={transcribingStem !== null}
-                        onClick={() => onTranscribeTrack(t.id)}
-                        title="把这一轨扒成 MIDI 音符"
+                        onClick={() => onTranscribeTrack(trk.id)}
+                        title={t("arr.transcribeTip")}
                       >
-                        {transcribingStem === t.id ? <Loader2 size={12} className="spin" /> : <Music2 size={12} />}
+                        {transcribingStem === trk.id ? <Loader2 size={12} className="spin" /> : <Music2 size={12} />}
                       </button>
                     )}
                   </div>
@@ -514,11 +515,11 @@ export const Arrangement: React.FC<Props> = ({
                 <div className="arr-lane" style={{ width: laneW }}>
                   <div
                     className={`clip ${st.muted ? "muted" : ""}`}
-                    style={{ width: x(durationSec), ["--track-color" as string]: t.color }}
+                    style={{ width: x(durationSec), ["--track-color" as string]: trk.color }}
                     onClick={(e) => onSeek(timeFromEvent(e, e.currentTarget))}
                   >
-                    <div className="clip-header">{t.name}</div>
-                    <WaveformClipCanvas peaks={t.peaks} color={t.color} width={x(durationSec)} />
+                    <div className="clip-header">{trk.name}</div>
+                    <WaveformClipCanvas peaks={trk.peaks} color={trk.color} width={x(durationSec)} />
                   </div>
                 </div>
               </div>
@@ -529,13 +530,13 @@ export const Arrangement: React.FC<Props> = ({
             <div className="arr-row arr-track-row">
               <div className="arr-head track-head" style={{ ["--track-color" as string]: "#4ade80" }}>
                 <div className="track-title">
-                  <span className="track-name">MIDI 旋律</span>
+                  <span className="track-name">{t("arr.midiTrack")}</span>
                   <span className="track-sub">
-                    {midiLabel || "转谱结果"} · {notes.length} 音符
+                    {midiLabel || t("arr.transcription")} · {t("score.notes", { n: notes.length })}
                   </span>
                 </div>
                 <div className="track-controls">
-                  <button className="track-action" onClick={onOpenMidiEditor} title="在下方编辑器中打开">
+                  <button className="track-action" onClick={onOpenMidiEditor} title={t("arr.openEditor")}>
                     <Pencil size={12} />
                   </button>
                 </div>
@@ -546,9 +547,9 @@ export const Arrangement: React.FC<Props> = ({
                   style={{ width: x(notesEnd) + 4, ["--track-color" as string]: "#4ade80" }}
                   onClick={(e) => onSeek(timeFromEvent(e, e.currentTarget))}
                   onDoubleClick={onOpenMidiEditor}
-                  title="双击打开钢琴卷帘编辑"
+                  title={t("arr.clipTip")}
                 >
-                  <div className="clip-header">MIDI · {midiLabel || "旋律"}</div>
+                  <div className="clip-header">MIDI · {midiLabel || t("arr.melody")}</div>
                   <MidiClipCanvas notes={notes} pxPerSec={pxPerSec} width={x(notesEnd) + 4} />
                 </div>
               </div>
@@ -567,7 +568,7 @@ export const Arrangement: React.FC<Props> = ({
         {!hasContent && <div className="arr-empty">{emptyState}</div>}
         {hasContent && dropH >= 48 && (
           <div className="arr-drop" style={{ height: dropH }}>
-            <div className="arr-drop-box">拖入音频文件</div>
+            <div className="arr-drop-box">{t("arr.drop")}</div>
           </div>
         )}
       </div>

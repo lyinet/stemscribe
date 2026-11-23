@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { RotateCcw, Sliders, Sparkles, Volume2 } from "lucide-react";
+import { t } from "../i18n";
 import type { ReverbPreset } from "../lib/audioEngine";
 import type { ReharmonizeStyle } from "../types/music";
 
@@ -16,11 +17,11 @@ interface Props {
   onReverbChange: (preset: ReverbPreset, wet: number) => void;
 }
 
-const STYLES: Array<{ id: ReharmonizeStyle; label: string }> = [
-  { id: "jazz_neosoul", label: "爵士 / City Pop" },
-  { id: "folk_open", label: "民谣指弹" },
-  { id: "cinematic_minor", label: "暗黑电影感" },
-  { id: "pop_beginner", label: "新手极简" },
+const STYLES: Array<{ id: ReharmonizeStyle; labelKey: import("../i18n").I18nKey }> = [
+  { id: "jazz_neosoul", labelKey: "fx.style.jazz" },
+  { id: "folk_open", labelKey: "fx.style.folk" },
+  { id: "cinematic_minor", labelKey: "fx.style.cinematic" },
+  { id: "pop_beginner", labelKey: "fx.style.pop" },
 ];
 
 export const StudioFxBar: React.FC<Props> = ({
@@ -68,7 +69,7 @@ export const StudioFxBar: React.FC<Props> = ({
       {/* Left: One-Click Offline Chord Reharmonizer */}
       <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
         <Sparkles size={14} color="#a855f7" />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>和弦风格重配</span>
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>{t("fx.reharmTitle")}</span>
         {STYLES.map((st) => (
           <button
             key={st.id}
@@ -76,16 +77,16 @@ export const StudioFxBar: React.FC<Props> = ({
             disabled={!hasChords}
             onClick={() => onReharmonize(st.id)}
           >
-            {st.label}
+            {t(st.labelKey)}
           </button>
         ))}
         {canRestoreChords && (
           <button
             className="btn btn-sm"
             onClick={onRestoreOriginalChords}
-            title="还原到风格重配前的原始和弦"
+            title={t("fx.restoreTip")}
           >
-            <RotateCcw size={12} /> 还原原版
+            <RotateCcw size={12} /> {t("fx.restore")}
           </button>
         )}
       </div>
@@ -93,16 +94,16 @@ export const StudioFxBar: React.FC<Props> = ({
       {/* Right: Studio Space Reverb & Master VU Meter */}
       <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
         <Sliders size={14} color="#38bdf8" />
-        <span className="muted">空间混响</span>
+        <span className="muted">{t("fx.reverb")}</span>
         <select
           className="select"
           style={{ width: 92, padding: "4px 8px" }}
           value={reverbPreset}
           onChange={(e) => onReverbChange(e.target.value as ReverbPreset, reverbWet)}
         >
-          <option value="off">关闭</option>
-          <option value="studio">录音室</option>
-          <option value="hall">音乐厅</option>
+          <option value="off">{t("fx.reverb.off")}</option>
+          <option value="studio">{t("fx.reverb.studio")}</option>
+          <option value="hall">{t("fx.reverb.hall")}</option>
         </select>
         {reverbPreset !== "off" && (
           <input
@@ -113,7 +114,7 @@ export const StudioFxBar: React.FC<Props> = ({
             value={reverbWet}
             onChange={(e) => onReverbChange(reverbPreset, Number(e.target.value))}
             style={{ width: 68 }}
-            title={`混响干湿比 ${Math.round(reverbWet * 100)}%`}
+            title={t("fx.wetTip", { pct: Math.round(reverbWet * 100) })}
           />
         )}
 
@@ -128,7 +129,7 @@ export const StudioFxBar: React.FC<Props> = ({
               border: "1px solid var(--border)",
               overflow: "hidden",
             }}
-            title="主总线实时峰值电平 (VU)"
+            title={t("fx.vuTip")}
           >
             <div
               style={{

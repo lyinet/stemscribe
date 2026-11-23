@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
+import { t } from "../i18n";
 import { NOTE_NAMES_FLAT, NOTE_NAMES_SHARP } from "../lib/musicTheory";
 import type { MidiNote } from "../types/music";
 
@@ -252,36 +253,36 @@ export const FallingNotesView: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header" style={{ flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title" title="Synthesia 下落音符，支持左右手分色跟弹">
-          瀑布流
-          <span className="badge">{notes.length} 音符</span>
+        <div className="card-title" title={t("falling.titleTip")}>
+          {t("falling.title")}
+          <span className="badge">{t("common.notes", { count: notes.length })}</span>
         </div>
 
         <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
           <button
             className={`btn btn-sm ${handSplitMode ? "btn-active" : ""}`}
             onClick={() => setHandSplitMode((v) => !v)}
-            title="开启后以分割点为界：左手翡翠绿 / 右手天蓝色"
+            title={t("falling.splitTip")}
           >
-            左右手分色
+            {t("falling.split")}
           </button>
           <select
             className="select"
             value={splitMidi}
             onChange={(e) => setSplitMidi(Number(e.target.value))}
             style={{ width: 92, height: 24, padding: "0 20px 0 8px", fontSize: 11 }}
-            title="左右手分割键位"
+            title={t("falling.splitKeyTip")}
           >
-            <option value={55}>G3 分割</option>
-            <option value={60}>C4 分割</option>
-            <option value={64}>E4 分割</option>
+            <option value={55}>{t("falling.splitAt", { note: "G3" })}</option>
+            <option value={60}>{t("falling.splitAt", { note: "C4" })}</option>
+            <option value={64}>{t("falling.splitAt", { note: "E4" })}</option>
           </select>
           <div className="seg">
             {(
               [
-                { id: "both", label: "双手" },
-                { id: "right", label: "仅右手" },
-                { id: "left", label: "仅左手" },
+                { id: "both", label: t("falling.both") },
+                { id: "right", label: t("falling.rightOnly") },
+                { id: "left", label: t("falling.leftOnly") },
               ] as const
             ).map((opt) => (
               <button
@@ -293,7 +294,7 @@ export const FallingNotesView: React.FC<Props> = ({
               </button>
             ))}
           </div>
-          <span className="muted">视野</span>
+          <span className="muted">{t("falling.view")}</span>
           <div className="seg">
             {[2, 4, 6].map((sec) => (
               <button
@@ -309,7 +310,7 @@ export const FallingNotesView: React.FC<Props> = ({
             className={`btn btn-sm ${showLabels ? "btn-active" : ""}`}
             onClick={() => setShowLabels((v) => !v)}
           >
-            音名
+            {t("falling.noteNames")}
           </button>
         </div>
       </div>
@@ -329,7 +330,7 @@ export const FallingNotesView: React.FC<Props> = ({
         }}
       />
       <div className="muted" style={{ marginTop: 6 }}>
-        提示：左手低音（翡翠绿）与右手高音（天蓝）以虚线分割，支持切换「仅右手 / 仅左手」单手专注练琴；接入 USB-MIDI 键盘时物理琴键实时高亮。
+        {t("falling.hint")}
       </div>
     </div>
   );

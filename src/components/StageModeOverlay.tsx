@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Pause, Play, Repeat, SkipBack, SkipForward, X } from "lucide-react";
+import { t } from "../i18n";
 import { transposeChordSymbol } from "../lib/musicTheory";
 import type { ChordEvent, LyricLine, Setlist, SongStructureSegment } from "../types/music";
 
@@ -144,12 +145,12 @@ export const StageModeOverlay: React.FC<Props> = ({
               color: "#60a5fa",
             }}
           >
-            STAGE MODE · 演出提词器
+            {t("stage.brand")}
           </span>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>{songTitle || "未命名曲目"}</span>
+          <span style={{ fontSize: 16, fontWeight: 600 }}>{songTitle || t("stage.untitled")}</span>
           {activeSetlist && activeSetlist.items.length > 0 && (
             <span className="badge ok">
-              歌单：{activeSetlist.name} ({activeSetlistIndex + 1}/{activeSetlist.items.length})
+              {t("stage.setlist", { name: activeSetlist.name, idx: activeSetlistIndex + 1, total: activeSetlist.items.length })}
             </span>
           )}
           {activeSection && (
@@ -201,28 +202,28 @@ export const StageModeOverlay: React.FC<Props> = ({
             <button
               className="btn btn-sm"
               onClick={() => setTextScale((s) => Math.max(0.8, Number((s - 0.1).toFixed(1))))}
-              title="缩小提词字号"
+              title={t("stage.smaller")}
             >
               A-
             </button>
             <button
               className="btn btn-sm"
               onClick={() => setTextScale((s) => Math.min(1.3, Number((s + 0.1).toFixed(1))))}
-              title="放大提词字号"
+              title={t("stage.larger")}
             >
               A+
             </button>
             <button
               className={`btn btn-sm ${mirrorMode ? "btn-active" : ""}`}
               onClick={() => setMirrorMode((v) => !v)}
-              title="实体玻璃提词器水平镜像翻转"
+              title={t("stage.mirrorTip")}
             >
-              镜像
+              {t("stage.mirror")}
             </button>
           </div>
 
-          <button className="btn" onClick={onClose} title="退出演出模式 (F / Esc)">
-            <X size={16} /> 退出演出模式
+          <button className="btn" onClick={onClose} title={t("stage.exitTip")}>
+            <X size={16} /> {t("stage.exit")}
           </button>
         </div>
       </div>
@@ -254,7 +255,7 @@ export const StageModeOverlay: React.FC<Props> = ({
             }}
           >
             <div style={{ fontSize: 13, color: "#93c5fd", marginBottom: 6 }}>
-              当前和弦 {capoFret > 0 ? `（变调夹 ${capoFret} 品指法）` : ""}
+              {t("stage.currentChord")} {capoFret > 0 ? t("stage.capoSuffix", { fret: capoFret }) : ""}
             </div>
             <div style={{ fontSize: 84, fontWeight: 800, lineHeight: 1.05, letterSpacing: -1 }}>
               {currentChord ? displayChord(currentChord.symbol) : "—"}
@@ -288,9 +289,9 @@ export const StageModeOverlay: React.FC<Props> = ({
               textAlign: "center",
             }}
           >
-            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>下一个和弦</div>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>{t("stage.nextChord")}</div>
             <div style={{ fontSize: 42, fontWeight: 700, color: "#cbd5e1" }}>
-              {nextChord ? displayChord(nextChord.symbol) : "结束"}
+              {nextChord ? displayChord(nextChord.symbol) : t("stage.end")}
             </div>
           </div>
         </div>
@@ -308,7 +309,7 @@ export const StageModeOverlay: React.FC<Props> = ({
         >
           {lyrics.length === 0 ? (
             <div style={{ fontSize: 20, color: "#64748b" }}>
-              暂无歌词时间轴 · 可在主界面「歌词」页签一键提取人声歌词
+              {t("stage.noLyrics")}
             </div>
           ) : (
             <>
@@ -357,12 +358,12 @@ export const StageModeOverlay: React.FC<Props> = ({
               disabled={!hasPrevSong}
               onClick={() => onJumpSetlistSong(activeSetlistIndex - 1)}
             >
-              <SkipBack size={14} /> 上一首
+              <SkipBack size={14} /> {t("stage.prev")}
             </button>
           )}
           <button className="btn btn-primary" onClick={onTogglePlay}>
             {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-            {isPlaying ? "暂停 (Space)" : "开始演奏 (Space)"}
+            {isPlaying ? t("stage.pause") : t("stage.play")}
           </button>
           {activeSetlist && (
             <button
@@ -370,7 +371,7 @@ export const StageModeOverlay: React.FC<Props> = ({
               disabled={!hasNextSong}
               onClick={() => onJumpSetlistSong(activeSetlistIndex + 1)}
             >
-              下一首 <SkipForward size={14} />
+              {t("stage.next")} <SkipForward size={14} />
             </button>
           )}
           <span className="muted" style={{ fontSize: 14, color: "#e2e8f0" }}>
@@ -383,9 +384,9 @@ export const StageModeOverlay: React.FC<Props> = ({
             className={`btn btn-sm ${loopEnabled ? "btn-active" : ""}`}
             onClick={onToggleLoop}
           >
-            <Repeat size={13} /> A-B 循环
+            <Repeat size={13} /> {t("stage.loop")}
           </button>
-          <span className="muted">倍速</span>
+          <span className="muted">{t("stage.rate")}</span>
           {[0.75, 0.85, 1.0].map((r) => (
             <button
               key={r}
@@ -395,7 +396,7 @@ export const StageModeOverlay: React.FC<Props> = ({
               {Math.round(r * 100)}%
             </button>
           ))}
-          <span className="muted">变调夹</span>
+          <span className="muted">{t("stage.capo")}</span>
           <button
             className="btn btn-sm"
             onClick={() => onCapoChange(Math.max(0, capoFret - 1))}
@@ -403,7 +404,7 @@ export const StageModeOverlay: React.FC<Props> = ({
             -
           </button>
           <span style={{ minWidth: 36, textAlign: "center", fontWeight: 600 }}>
-            {capoFret}品
+            {t("stage.capoFret", { fret: capoFret })}
           </span>
           <button
             className="btn btn-sm"

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import {
   connectMidiInput,
   disconnectMidiInput,
@@ -77,7 +78,7 @@ export class HardwareMidiBridge {
       requestMIDIAccess?: (opts?: { sysex: boolean }) => Promise<WebMidiAccess>;
     };
     if (!nav.requestMIDIAccess) {
-      throw new Error("当前浏览器环境不支持 Web MIDI API；请在 macOS 桌面端使用原生 CoreMIDI 接入");
+      throw new Error(t("midi.webMidiUnsupported"));
     }
 
     const access = await nav.requestMIDIAccess({ sysex: false });

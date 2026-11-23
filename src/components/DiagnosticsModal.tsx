@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { t } from "../i18n";
 import { Activity, Check, Copy, RefreshCw, X } from "lucide-react";
 import { getSystemDiagnostics } from "../lib/tauriApi";
 import type { LlmRelayConfig, SystemDiagnostics } from "../types/music";
@@ -38,15 +39,15 @@ export const DiagnosticsModal: React.FC<Props> = ({ open, relayConfig, onClose }
   const handleCopy = async () => {
     if (!diag) return;
     const report = [
-      `StemScribe 诊断报告 (v${diag.app_version})`,
-      `- 系统架构: ${diag.os} / ${diag.arch}`,
-      `- CoreML 加速: ${diag.coreml_enabled ? "已启用" : "未启用"}`,
-      `- Basic Pitch 模型: ${diag.basic_pitch_installed ? "已安装" : "未安装 (将自动使用内置离线算法)"}`,
-      `- HTDemucs 4-Stem 模型: ${diag.htdemucs_installed ? "已安装" : "未安装 (将自动使用内置 DSP 分轨)"}`,
-      `- 模型缓存目录: ${diag.models_dir}`,
-      `- 检测到 CoreMIDI 硬件端口: ${diag.midi_input_count} 个`,
-      `- 本地统计: ${diag.saved_projects_count} 个工程 · ${diag.practice_records_count} 条练琴日志 · ${diag.recorded_takes_count} 条翻唱 Take`,
-      `- 多模态中转站: ${relayConfigured ? `已配置 (${relayConfig.protocol} / ${relayConfig.model})` : "未配置"}`,
+      t("diag.report.title", { v: diag.app_version }),
+      t("diag.report.arch", { os: diag.os, arch: diag.arch }),
+      t("diag.report.coreml", { state: diag.coreml_enabled ? t("diag.enabled") : t("diag.disabled") }),
+      t("diag.report.bp", { state: diag.basic_pitch_installed ? t("diag.installed") : t("diag.notInstalledBp") }),
+      t("diag.report.htd", { state: diag.htdemucs_installed ? t("diag.installed") : t("diag.notInstalledHtd") }),
+      t("diag.report.modelsDir", { dir: diag.models_dir }),
+      t("diag.report.midi", { n: diag.midi_input_count }),
+      t("diag.report.local", { p: diag.saved_projects_count, r: diag.practice_records_count, tk: diag.recorded_takes_count }),
+      t("diag.report.relay", { state: relayConfigured ? t("diag.relayConfigured", { proto: relayConfig.protocol, model: relayConfig.model }) : t("diag.relayNone") }),
     ].join("\n");
     try {
       await navigator.clipboard.writeText(report);
@@ -73,11 +74,11 @@ export const DiagnosticsModal: React.FC<Props> = ({ open, relayConfig, onClose }
       <div className="card" style={{ width: 580, maxWidth: "92vw" }} onClick={(e) => e.stopPropagation()}>
         <div className="card-header">
           <div className="card-title">
-            <Activity size={15} /> 系统诊断与环境自检
+            <Activity size={15} /> {t("diag.title")}
           </div>
           <div className="row" style={{ gap: 6 }}>
             <button className="btn btn-sm" onClick={load} disabled={loading}>
-              <RefreshCw size={12} /> 刷新
+              <RefreshCw size={12} /> {t("diag.refresh")}
             </button>
             <button className="btn btn-sm" onClick={onClose}>
               <X size={14} />
@@ -87,55 +88,55 @@ export const DiagnosticsModal: React.FC<Props> = ({ open, relayConfig, onClose }
 
         {!diag ? (
           <div className="muted" style={{ padding: 20, textAlign: "center" }}>
-            正在采集本机运行环境信息...
+            {t("diag.collecting")}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12.5 }}>
             <div className="section-pill" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-              <span className="muted">应用版本与平台</span>
+              <span className="muted">{t("diag.app")}</span>
               <strong>v{diag.app_version} · {diag.os} ({diag.arch})</strong>
             </div>
             <div className="section-pill" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-              <span className="muted">Apple Silicon CoreML 硬件加速</span>
+              <span className="muted">{t("diag.coreml")}</span>
               <span className={`badge ${diag.coreml_enabled ? "ok" : ""}`}>
-                {diag.coreml_enabled ? "已就绪" : "CPU 模式"}
+                {diag.coreml_enabled ? t("diag.ready") : t("diag.cpu")}
               </span>
             </div>
             <div className="section-pill" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-              <span className="muted">本地 ONNX 模型状态</span>
+              <span className="muted">{t("diag.models")}</span>
               <div className="row" style={{ gap: 6 }}>
                 <span className={`badge ${diag.basic_pitch_installed ? "ok" : ""}`}>
-                  Basic Pitch: {diag.basic_pitch_installed ? "已安装" : "离线回退"}
+                  Basic Pitch: {diag.basic_pitch_installed ? t("diag.installed") : t("diag.offlineFallback")}
                 </span>
                 <span className={`badge ${diag.htdemucs_installed ? "ok" : ""}`}>
-                  HTDemucs: {diag.htdemucs_installed ? "已安装" : "DSP 回退"}
+                  HTDemucs: {diag.htdemucs_installed ? t("diag.installed") : t("diag.dspFallback")}
                 </span>
               </div>
             </div>
             <div className="section-pill" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-              <span className="muted">原生 CoreMIDI 硬件端口</span>
-              <strong>{diag.midi_input_count} 个已检测到</strong>
+              <span className="muted">{t("diag.midiPorts")}</span>
+              <strong>{t("diag.midiCount", { n: diag.midi_input_count })}</strong>
             </div>
             <div className="section-pill" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-              <span className="muted">本地数据统计</span>
+              <span className="muted">{t("diag.local")}</span>
               <strong>
-                {diag.saved_projects_count} 工程 · {diag.practice_records_count} 练琴日志 · {diag.recorded_takes_count} 翻唱 Take
+                {t("diag.localStats", { p: diag.saved_projects_count, r: diag.practice_records_count, tk: diag.recorded_takes_count })}
               </strong>
             </div>
             <div className="section-pill" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-              <span className="muted">多模态大模型中转站</span>
+              <span className="muted">{t("diag.relay")}</span>
               <span className={`badge ${relayConfigured ? "ok" : ""}`}>
-                {relayConfigured ? `${relayConfig.protocol} · ${relayConfig.model}` : "未填写 API Key"}
+                {relayConfigured ? `${relayConfig.protocol} · ${relayConfig.model}` : t("diag.noApiKey")}
               </span>
             </div>
             <div className="muted" style={{ fontSize: 11.5, wordBreak: "break-all" }}>
-              模型目录：{diag.models_dir}
+              {t("diag.modelsDir", { dir: diag.models_dir })}
             </div>
 
             <div className="row" style={{ justifyContent: "flex-end", marginTop: 6 }}>
               <button className="btn btn-sm btn-primary" onClick={handleCopy}>
                 {copied ? <Check size={13} /> : <Copy size={13} />}
-                {copied ? "已复制诊断报告" : "一键复制诊断报告"}
+                {copied ? t("diag.copied") : t("diag.copy")}
               </button>
             </div>
           </div>

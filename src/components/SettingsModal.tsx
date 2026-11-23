@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Bot, Cpu, HardDrive, Info, Keyboard, Palette, PlugZap, Piano, X } from "lucide-react";
+import { getLanguage, setLanguage, t, useLanguage } from "../i18n";
+import type { I18nKey, Language } from "../i18n";
 import type { MidiInputDeviceInfo } from "../lib/webMidi";
 import type { LlmRelayConfig, ModelStatus, RelayProtocol } from "../types/music";
 
@@ -27,19 +29,19 @@ interface Props {
   onOpenShortcuts: () => void;
 }
 
-const SECTIONS: Array<{ id: SettingsSection; label: string; icon: React.ReactNode }> = [
-  { id: "general", label: "通用", icon: <Palette size={15} /> },
-  { id: "ai", label: "AI 服务", icon: <Bot size={15} /> },
-  { id: "models", label: "本地模型", icon: <HardDrive size={15} /> },
-  { id: "midi", label: "MIDI 设备", icon: <Piano size={15} /> },
-  { id: "about", label: "关于", icon: <Info size={15} /> },
+const SECTIONS: Array<{ id: SettingsSection; labelKey: I18nKey; icon: React.ReactNode }> = [
+  { id: "general", labelKey: "settings.sec.general", icon: <Palette size={15} /> },
+  { id: "ai", labelKey: "settings.sec.ai", icon: <Bot size={15} /> },
+  { id: "models", labelKey: "settings.sec.models", icon: <HardDrive size={15} /> },
+  { id: "midi", labelKey: "settings.sec.midi", icon: <Piano size={15} /> },
+  { id: "about", labelKey: "settings.sec.about", icon: <Info size={15} /> },
 ];
 
-const RELAY_TEMPLATES: Array<{ label: string; protocol: RelayProtocol; model: string }> = [
-  { label: "New API (Gemini)", protocol: "openai_input_audio", model: "gemini-2.5-pro" },
-  { label: "Qwen-Omni 音频", protocol: "openai_audio_url", model: "qwen2.5-omni-7b" },
-  { label: "Gemini 原生中转", protocol: "gemini_compatible", model: "gemini-2.5-pro" },
-  { label: "纯文本修谱", protocol: "text_only_midi", model: "deepseek-chat" },
+const RELAY_TEMPLATES: Array<{ labelKey: I18nKey; protocol: RelayProtocol; model: string }> = [
+  { labelKey: "settings.tpl.newapi", protocol: "openai_input_audio", model: "gemini-2.5-pro" },
+  { labelKey: "settings.tpl.qwen", protocol: "openai_audio_url", model: "qwen2.5-omni-7b" },
+  { labelKey: "settings.tpl.gemini", protocol: "gemini_compatible", model: "gemini-2.5-pro" },
+  { labelKey: "settings.tpl.text", protocol: "text_only_midi", model: "deepseek-chat" },
 ];
 
 const THEME_SWATCH: Record<AppThemeId, string[]> = {
@@ -78,6 +80,7 @@ export const SettingsModal: React.FC<Props> = ({
   onOpenDiagnostics,
   onOpenShortcuts,
 }) => {
+  const lang = useLanguage();
   const [section, setSection] = useState<SettingsSection>(initialSection);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState("");
@@ -99,7 +102,7 @@ export const SettingsModal: React.FC<Props> = ({
 
   const handleTest = async () => {
     setTesting(true);
-    setTestResult("正在测试连接...");
+    setTestResult(t("settings.testing"));
     try {
       setTestResult(await onTestRelay());
     } catch (err) {
@@ -113,7 +116,7 @@ export const SettingsModal: React.FC<Props> = ({
     <div className="settings-backdrop" onClick={onClose}>
       <div className="settings-window" onClick={(e) => e.stopPropagation()}>
         <nav className="settings-nav">
-          <div className="settings-nav-title">设置</div>
+          <div className="settings-nav-title">{t("settings.title")}</div>
           {SECTIONS.map((s) => (
             <button
               key={s.id}
@@ -121,22 +124,23 @@ export const SettingsModal: React.FC<Props> = ({
               onClick={() => setSection(s.id)}
             >
               {s.icon}
-              {s.label}
+              {t(s.labelKey)}
             </button>
           ))}
         </nav>
 
         <div className="settings-body">
           <header className="settings-header">
-            <h2>{SECTIONS.find((s) => s.id === section)?.label}</h2>
-            <button className="icon-btn" onClick={onClose} title="关闭 (Esc)">
+            <h2>{t(SECTIONS.find((s) => s.id === section)?.labelKey ?? "settings.sec.general")}</h2>
+            <button className="icon-btn" onClick={onClose} title={t("settings.closeTip")}>
               <X size={16} />
             </button>
           </header>
 
           <div className="settings-content">
             {section === "general" && (
-              <Field label="界面主题">
+              <>
+              <Field label={t("settings.theme")}>
                 <div className="theme-grid">
                   {(Object.keys(themeLabels) as AppThemeId[]).map((id) => (
                     <button
@@ -153,28 +157,36 @@ export const SettingsModal: React.FC<Props> = ({
                   ))}
                 </div>
               </Field>
+              <Field label={t("settings.language")}>
+                <select
+                  className="select"
+                  value={lang}
+                  onChange={(e) => setLanguage(e.target.value as Language)}
+                >
+                  <option value="zh">中文</option>
+                  <option value="en">English</option>
+                </select>
+              </Field>
+              </>
             )}
 
             {section === "ai" && (
               <>
-                <p className="set-intro">
-                  编曲分析、智能修谱和歌词识别会调用你配置的大模型服务（OpenAI / Gemini 兼容接口）。音频会自动降采样为 16kHz
-                  单声道后上传。
-                </p>
-                <Field label="快速模板">
+                <p className="set-intro">{t("settings.aiIntro")}</p>
+                <Field label={t("settings.templates")}>
                   <div className="chip-row">
                     {RELAY_TEMPLATES.map((tpl) => (
                       <button
-                        key={tpl.label}
+                        key={tpl.labelKey}
                         className="chip"
                         onClick={() => onRelayConfigChange({ ...relayConfig, protocol: tpl.protocol, model: tpl.model })}
                       >
-                        {tpl.label}
+                        {t(tpl.labelKey)}
                       </button>
                     ))}
                   </div>
                 </Field>
-                <Field label="接口协议">
+                <Field label={t("settings.protocol")}>
                   <select
                     className="select"
                     value={relayConfig.protocol}
@@ -182,8 +194,8 @@ export const SettingsModal: React.FC<Props> = ({
                   >
                     <option value="openai_input_audio">OpenAI input_audio（New API / OpenRouter / GPT-4o-audio）</option>
                     <option value="openai_audio_url">OpenAI audio_url DataURI（One API / Qwen-Omni）</option>
-                    <option value="gemini_compatible">Gemini 原生（v1beta generateContent）</option>
-                    <option value="text_only_midi">仅传 MIDI 文本（任意纯文本模型）</option>
+                    <option value="gemini_compatible">{t("settings.protoGemini")}</option>
+                    <option value="text_only_midi">{t("settings.protoText")}</option>
                   </select>
                 </Field>
                 <Field label="Base URL">
@@ -195,7 +207,7 @@ export const SettingsModal: React.FC<Props> = ({
                   />
                 </Field>
                 <div className="grid-2">
-                  <Field label="模型名称">
+                  <Field label={t("settings.modelName")}>
                     <input
                       className="input"
                       placeholder="gemini-2.5-pro"
@@ -215,7 +227,7 @@ export const SettingsModal: React.FC<Props> = ({
                 </div>
                 <div className="row">
                   <button className="btn" onClick={handleTest} disabled={testing}>
-                    <PlugZap size={14} /> {testing ? "测试中..." : "测试连接"}
+                    <PlugZap size={14} /> {testing ? t("settings.testing") : t("settings.test")}
                   </button>
                   {testResult && <span className="set-hint">{testResult}</span>}
                 </div>
@@ -224,82 +236,82 @@ export const SettingsModal: React.FC<Props> = ({
 
             {section === "models" && (
               <>
-                <p className="set-intro">AI 分轨与扒谱完全在本机离线运行，音频不会上传。首次使用需下载一次模型。</p>
+                <p className="set-intro">{t("settings.modelsIntro")}</p>
                 <div className="status-list">
                   <div className="status-item">
                     <Cpu size={15} />
-                    <span>推理引擎</span>
-                    <b className="ok">ONNX Runtime 本地推理</b>
+                    <span>{t("settings.engine")}</span>
+                    <b className="ok">{t("settings.engineVal")}</b>
                   </div>
                   <div className="status-item">
                     <HardDrive size={15} />
-                    <span>HTDemucs 4 轨分离模型</span>
+                    <span>{t("settings.htd")}</span>
                     <b className={modelStatus?.demucs_installed ? "ok" : "warn"}>
-                      {modelStatus?.demucs_installed ? "已安装" : "未安装"}
+                      {modelStatus?.demucs_installed ? t("settings.installed") : t("settings.notInstalled")}
                     </b>
                   </div>
                   <div className="status-item">
                     <HardDrive size={15} />
-                    <span>HTDemucs-FT 人声专家</span>
+                    <span>{t("settings.htdFt")}</span>
                     <b className={modelStatus?.demucs_ft_vocals_installed ? "ok" : "warn"}>
-                      {modelStatus?.demucs_ft_vocals_installed ? "已安装" : "未安装"}
+                      {modelStatus?.demucs_ft_vocals_installed ? t("settings.installed") : t("settings.notInstalled")}
                     </b>
                   </div>
                   <div className="status-item">
                     <HardDrive size={15} />
-                    <span>Basic Pitch 扒谱模型</span>
+                    <span>{t("settings.bp")}</span>
                     <b className={modelStatus?.basic_pitch_installed ? "ok" : "warn"}>
-                      {modelStatus?.basic_pitch_installed ? "已安装" : "未安装"}
+                      {modelStatus?.basic_pitch_installed ? t("settings.installed") : t("settings.notInstalled")}
                     </b>
                   </div>
                   <div className="status-item">
                     <HardDrive size={15} />
-                    <span>Audiobox 音质评委</span>
+                    <span>{t("settings.critic")}</span>
                     <b className={modelStatus?.critic_installed ? "ok" : "warn"}>
-                      {modelStatus?.critic_installed ? "已安装" : "未安装"}
+                      {modelStatus?.critic_installed ? t("settings.installed") : t("settings.notInstalled")}
                     </b>
                   </div>
                 </div>
-                <Field label="高质量分轨">
+                <Field label={t("settings.hq")}>
                   <label className="row" style={{ gap: 8 }}>
                     <input
                       type="checkbox"
                       checked={highQualitySep}
                       onChange={(e) => onHighQualitySepChange(e.target.checked)}
                     />
-                    <span>高质量分轨（更慢，需要额外模型约 166 MB）</span>
+                    <span>{t("settings.hqDesc")}</span>
                   </label>
                 </Field>
-                <div className="set-hint">模型目录：{modelStatus?.models_dir ?? "—"}</div>
+                <div className="set-hint">{t("settings.modelsDir", { dir: modelStatus?.models_dir ?? "—" })}</div>
                 <button className="btn btn-primary" onClick={onOpenModelManager}>
-                  <HardDrive size={14} /> 下载 / 导入模型...
+                  <HardDrive size={14} /> {t("settings.downloadModels")}
                 </button>
               </>
             )}
 
             {section === "midi" && (
               <>
-                <p className="set-intro">连接 USB-MIDI 键盘后，琴键视图、瀑布流和跟弹打分会实时显示你按下的键。</p>
+                <p className="set-intro">{t("settings.midiIntro")}</p>
                 <div className="status-list">
                   {midiDevices.length === 0 ? (
                     <div className="status-item">
                       <Piano size={15} />
-                      <span>尚未连接 MIDI 设备</span>
+                      <span>{t("settings.noMidi")}</span>
                     </div>
                   ) : (
                     midiDevices.map((d) => (
                       <div key={d.id} className="status-item">
                         <Piano size={15} />
                         <span>{d.name}</span>
-                        <b className="ok">{d.manufacturer || "已连接"}</b>
+                        <b className="ok">{d.manufacturer || t("settings.connected")}</b>
                       </div>
                     ))
                   )}
                 </div>
                 <button className="btn" onClick={onConnectMidi}>
-                  <Piano size={14} /> 扫描并连接 MIDI 设备
+                  <Piano size={14} /> {t("settings.scanMidi")}
                 </button>
-                <div className="set-hint">没有 MIDI 键盘？在「琴键」视图里可以直接用电脑键盘 A–L 弹奏。</div>
+                <div className="set-hint">{t("settings.midiHint")}</div>
               </>
             )}
 
@@ -307,15 +319,15 @@ export const SettingsModal: React.FC<Props> = ({
               <>
                 <div className="about-hero">
                   <div className="about-name">StemScribe</div>
-                  <div className="set-hint">版本 {appVersion} · macOS Apple Silicon AI 扒带工作站</div>
-                  <div className="set-hint">崩溃日志：~/Library/Logs/StemScribe/crash.log</div>
+                  <div className="set-hint">{t("settings.version", { v: appVersion })}</div>
+                  <div className="set-hint">{t("settings.crashLog")}</div>
                 </div>
                 <div className="row">
                   <button className="btn" onClick={onOpenDiagnostics}>
-                    <Cpu size={14} /> 系统诊断
+                    <Cpu size={14} /> {t("settings.diagnostics")}
                   </button>
                   <button className="btn" onClick={onOpenShortcuts}>
-                    <Keyboard size={14} /> 快捷键
+                    <Keyboard size={14} /> {t("settings.shortcuts")}
                   </button>
                 </div>
               </>

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type {
   AudioMetadata,
   ChordEvent,
@@ -239,18 +240,18 @@ export function createDemoStudioBundle(): DemoStudioBundle {
   const otherUrl = encodeMonoToStereoWavBlob(other, sr);
 
   const stems: StemOutput[] = [
-    { name: "vocals", label_zh: "人声", file_path: vocalsUrl, duration_sec: durationSec, waveform_peaks: extractPeaks(vocals, 220) },
-    { name: "drums", label_zh: "鼓组", file_path: drumsUrl, duration_sec: durationSec, waveform_peaks: extractPeaks(drums, 220) },
-    { name: "bass", label_zh: "贝斯", file_path: bassUrl, duration_sec: durationSec, waveform_peaks: extractPeaks(bass, 220) },
-    { name: "other", label_zh: "伴奏/其他", file_path: otherUrl, duration_sec: durationSec, waveform_peaks: extractPeaks(other, 220) },
+    { name: "vocals", label_zh: t("demo.stem.vocals"), file_path: vocalsUrl, duration_sec: durationSec, waveform_peaks: extractPeaks(vocals, 220) },
+    { name: "drums", label_zh: t("demo.stem.drums"), file_path: drumsUrl, duration_sec: durationSec, waveform_peaks: extractPeaks(drums, 220) },
+    { name: "bass", label_zh: t("demo.stem.bass"), file_path: bassUrl, duration_sec: durationSec, waveform_peaks: extractPeaks(bass, 220) },
+    { name: "other", label_zh: t("demo.stem.other"), file_path: otherUrl, duration_sec: durationSec, waveform_peaks: extractPeaks(other, 220) },
   ];
 
   const structure: SongStructureSegment[] = [
-    { id: "demo_sec_0", label: "前奏 Intro", kind: "intro", start_sec: 0, end_sec: 4, energy: 0.42 },
-    { id: "demo_sec_1", label: "主歌 Verse", kind: "verse", start_sec: 4, end_sec: 8, energy: 0.64 },
-    { id: "demo_sec_2", label: "副歌 Chorus", kind: "chorus", start_sec: 8, end_sec: 16, energy: 0.94 },
-    { id: "demo_sec_3", label: "副歌 Chorus 2", kind: "chorus", start_sec: 16, end_sec: 20, energy: 0.9 },
-    { id: "demo_sec_4", label: "尾奏 Outro", kind: "outro", start_sec: 20, end_sec: 24, energy: 0.48 },
+    { id: "demo_sec_0", label: t("demo.seg.intro"), kind: "intro", start_sec: 0, end_sec: 4, energy: 0.42 },
+    { id: "demo_sec_1", label: t("demo.seg.verse"), kind: "verse", start_sec: 4, end_sec: 8, energy: 0.64 },
+    { id: "demo_sec_2", label: t("demo.seg.chorus"), kind: "chorus", start_sec: 8, end_sec: 16, energy: 0.94 },
+    { id: "demo_sec_3", label: t("demo.seg.chorus2"), kind: "chorus", start_sec: 16, end_sec: 20, energy: 0.9 },
+    { id: "demo_sec_4", label: t("demo.seg.outro"), kind: "outro", start_sec: 20, end_sec: 24, energy: 0.48 },
   ];
 
   const lyrics: LyricLine[] = [
@@ -280,7 +281,7 @@ export function createDemoStudioBundle(): DemoStudioBundle {
     keyEst: {
       tonic: "C",
       mode: "major",
-      label: "C 大调 (Major)",
+      label: t("demo.key"),
       confidence: 0.97,
       scale_pitch_classes: [0, 2, 4, 5, 7, 9, 11],
     },

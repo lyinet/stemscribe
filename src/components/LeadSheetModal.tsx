@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { Download, FileText, Printer, X } from "lucide-react";
+import { t } from "../i18n";
 import { transposeChordSymbol } from "../lib/musicTheory";
 import type {
   ChordEvent,
@@ -55,8 +56,8 @@ export const LeadSheetModal: React.FC<Props> = ({
 
   if (!open) return null;
 
-  const cleanTitle = (songName || "StemScribe 弹唱谱").replace(/\.(wav|mp3|flac|m4a|ogg)$/i, "");
-  const keyLabel = keyEst?.label ?? "未检测调性";
+  const cleanTitle = (songName || t("leadsheet.defaultTitle")).replace(/\.(wav|mp3|flac|m4a|ogg)$/i, "");
+  const keyLabel = keyEst?.label ?? t("leadsheet.noKey");
 
   const payload: LeadSheetInput = {
     title: cleanTitle,
@@ -90,14 +91,14 @@ export const LeadSheetModal: React.FC<Props> = ({
       >
         <div className="card-header">
           <div className="card-title">
-            <FileText size={16} /> A4 吉他弹唱谱 / 和弦歌词谱排版预览
+            <FileText size={16} /> {t("leadsheet.title")}
           </div>
           <div className="row">
             <button className="btn btn-sm" onClick={() => window.print()}>
-              <Printer size={13} /> 直接打印 / 存为 PDF
+              <Printer size={13} /> {t("leadsheet.print")}
             </button>
             <button className="btn btn-primary btn-sm" onClick={() => onExportHtml(payload)}>
-              <Download size={13} /> 导出独立 A4 HTML 谱纸
+              <Download size={13} /> {t("leadsheet.export")}
             </button>
             <button className="btn btn-sm" onClick={onClose}>
               <X size={14} />
@@ -128,11 +129,11 @@ export const LeadSheetModal: React.FC<Props> = ({
             <div>
               <h2 style={{ margin: 0, fontSize: 22 }}>{cleanTitle}</h2>
               <div style={{ fontSize: 12.5, color: "#4b5563", marginTop: 4 }}>
-                调性：{keyLabel} · 速度：{bpm.toFixed(0)} BPM ·{" "}
-                {capoFret > 0 ? `变调夹夹 ${capoFret} 品（以下为夹后指法和弦）` : "原调不夹 (Capo 0)"}
+                {t("leadsheet.meta", { key: keyLabel, bpm: bpm.toFixed(0) })}{" "}
+                {capoFret > 0 ? t("leadsheet.capoOn", { fret: capoFret }) : t("leadsheet.capoOff")}
               </div>
             </div>
-            <span style={{ fontSize: 12, color: "#6b7280" }}>StemScribe A4 弹唱谱</span>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>{t("leadsheet.brand")}</span>
           </div>
 
           {uniqueChords.length > 0 && (
@@ -169,7 +170,7 @@ export const LeadSheetModal: React.FC<Props> = ({
                   marginBottom: 10,
                 }}
               >
-                全曲和弦走向（暂无歌词，可在「歌词」页签一键提取后自动对齐）
+                {t("leadsheet.chordsOnly")}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: 15, fontWeight: 700, color: "#2563eb" }}>
                 {adjustedChords.map((c, idx) => (

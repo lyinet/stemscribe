@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { NOTE_NAMES_SHARP } from "./musicTheory";
 
 export interface PitchReading {
@@ -81,7 +82,7 @@ export class LiveMicPitchTracker {
   public async start(onReading: (reading: PitchReading | null) => void): Promise<void> {
     this.stop();
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error("当前环境不支持麦克风音频采集");
+      throw new Error(t("mic.audioCaptureUnsupported"));
     }
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {

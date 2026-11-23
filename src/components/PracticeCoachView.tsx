@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "../i18n";
 import { Award, Download, Mic, MicOff, Radio, RotateCcw, Save, Share2, Trash2, TrendingUp, Trophy, Usb } from "lucide-react";
 import { chordToPitchClasses, NOTE_NAMES_SHARP, transposeChordSymbol } from "../lib/musicTheory";
 import { LiveMicPitchTracker, type PitchReading } from "../lib/pitchTracker";
@@ -176,7 +177,7 @@ export const PracticeCoachView: React.FC<Props> = ({
   const handleSave = () => {
     const rec: PracticeRecord = {
       id: `prac_${Date.now()}`,
-      song_name: songName || "未命名曲目",
+      song_name: songName || t("coach.untitled"),
       timestamp: new Date().toLocaleString("zh-CN", { hour12: false }),
       accuracy_pct: accuracyPct,
       max_combo: maxCombo,
@@ -193,12 +194,12 @@ export const PracticeCoachView: React.FC<Props> = ({
   return (
     <div className="card">
       <div className="card-header">
-        <div className="card-title" title="实时调音器与麦克风 / USB-MIDI 跟弹打分">
+        <div className="card-title" title={t("coach.titleTip")}>
           <Trophy size={14} color="#f59e0b" />
-          <span>跟弹打分</span>
+          <span>{t("coach.title")}</span>
           {totalChecks > 0 && (
             <span className="badge ok">
-              {rank} 级 · 命中率 {accuracyPct.toFixed(1)}% · 连击 {combo}
+              {t("coach.summary", { rank, acc: accuracyPct.toFixed(1), combo })}
             </span>
           )}
         </div>
@@ -207,16 +208,16 @@ export const PracticeCoachView: React.FC<Props> = ({
           <button
             className={`btn btn-sm ${midiDeviceCount > 0 ? "btn-active" : ""}`}
             onClick={onConnectMidi}
-            title="接入 USB-MIDI 电钢琴实现零延迟复音跟弹判定"
+            title={t("coach.midiTip")}
           >
-            <Usb size={13} /> {midiDeviceCount > 0 ? `已连 ${midiDeviceCount} 台 MIDI` : "连接 USB-MIDI"}
+            <Usb size={13} /> {midiDeviceCount > 0 ? t("coach.midiConnected", { n: midiDeviceCount }) : t("coach.connectMidi")}
           </button>
           <button
             className={`btn btn-sm ${micActive ? "btn-primary" : ""}`}
             onClick={toggleMic}
           >
             {micActive ? <MicOff size={13} /> : <Mic size={13} />}
-            {micActive ? "关闭麦克风" : "开启麦克风/声卡"}
+            {micActive ? t("coach.micOff") : t("coach.micOn")}
           </button>
           <button
             className={`btn btn-sm ${simActive ? "btn-active" : ""}`}
@@ -227,32 +228,32 @@ export const PracticeCoachView: React.FC<Props> = ({
               }
               setSimActive((v) => !v);
             }}
-            title="无外接乐器时模拟精准音高信号体验打分"
+            title={t("coach.simTip")}
           >
-            <Radio size={13} /> {simActive ? "停止模拟" : "模拟测试"}
+            <Radio size={13} /> {simActive ? t("coach.simStop") : t("coach.simStart")}
           </button>
-          <button className="btn btn-sm" onClick={resetSession} title="重置本次打分">
-            <RotateCcw size={13} /> 重置
+          <button className="btn btn-sm" onClick={resetSession} title={t("coach.resetTip")}>
+            <RotateCcw size={13} /> {t("coach.reset")}
           </button>
           <button
             className="btn btn-sm"
             disabled={totalChecks === 0}
             onClick={handleSave}
           >
-            <Save size={13} /> 保存记录
+            <Save size={13} /> {t("coach.save")}
           </button>
           <button
             className="btn btn-sm btn-active"
             onClick={() => onOpenShareCard({ accuracyPct, maxCombo, rank })}
           >
-            <Share2 size={13} /> 生成分享卡片
+            <Share2 size={13} /> {t("coach.share")}
           </button>
         </div>
       </div>
 
       {micError && (
         <div className="section-pill" style={{ borderColor: "var(--rose)", color: "#fda4af" }}>
-          麦克风启动失败：{micError}（请在 macOS 系统设置 → 隐私与安全性 → 麦克风 中授权，或使用 USB-MIDI / 模拟测试）
+          {t("coach.micError", { err: micError })}
         </div>
       )}
 
@@ -266,13 +267,13 @@ export const PracticeCoachView: React.FC<Props> = ({
           }}
         >
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-            <span className="muted">实时高精度十二平均律调音器 (75–1200 Hz)</span>
+            <span className="muted">{t("coach.tuner")}</span>
             <span className="muted">
               {pressedHardwareNotes.length > 0
-                ? `MIDI 按键: ${pressedHardwareNotes.map((p) => `${NOTE_NAMES_SHARP[p % 12]}${Math.floor(p / 12) - 1}`).join(" ")}`
+                ? t("coach.midiKeys", { notes: pressedHardwareNotes.map((p) => `${NOTE_NAMES_SHARP[p % 12]}${Math.floor(p / 12) - 1}`).join(" ") })
                 : reading
                 ? `${reading.frequencyHz.toFixed(1)} Hz`
-                : "等待音频 / MIDI 输入..."}
+                : t("coach.waiting")}
             </span>
           </div>
 
@@ -301,10 +302,10 @@ export const PracticeCoachView: React.FC<Props> = ({
             </span>
             <span className="badge" style={{ fontSize: 12 }}>
               {pressedHardwareNotes.length > 0
-                ? "USB-MIDI 零误差"
+                ? t("coach.midiExact")
                 : reading
-                ? `${reading.centsOff >= 0 ? "+" : ""}${reading.centsOff} 音分${inTune ? " · 准音" : ""}`
-                : "静音"}
+                ? t("coach.cents", { sign: reading.centsOff >= 0 ? "+" : "", cents: reading.centsOff, suffix: inTune ? t("coach.inTune") : "" })
+                : t("coach.silent")}
             </span>
           </div>
 
@@ -346,9 +347,9 @@ export const PracticeCoachView: React.FC<Props> = ({
             )}
           </div>
           <div className="row" style={{ justifyContent: "space-between", marginTop: 4, fontSize: 10.5 }}>
-            <span className="muted">-50¢ 偏低</span>
-            <span className="muted">0¢ 标准音 A4=440Hz</span>
-            <span className="muted">+50¢ 偏高</span>
+            <span className="muted">{t("coach.flat")}</span>
+            <span className="muted">{t("coach.a440")}</span>
+            <span className="muted">{t("coach.sharp")}</span>
           </div>
         </div>
 
@@ -364,7 +365,7 @@ export const PracticeCoachView: React.FC<Props> = ({
           }}
         >
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <span className="muted">跟弹/跟唱实时判定</span>
+            <span className="muted">{t("coach.judge")}</span>
             <span
               className="badge"
               style={{
@@ -376,25 +377,25 @@ export const PracticeCoachView: React.FC<Props> = ({
                     : "var(--muted)",
               }}
             >
-              {lastFeedback === "hit" ? "PERFECT 命中!" : lastFeedback === "miss" ? "偏移 · 再试一次" : "播放后自动计分"}
+              {lastFeedback === "hit" ? t("coach.hit") : lastFeedback === "miss" ? t("coach.miss") : t("coach.idle")}
             </span>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, margin: "10px 0" }}>
             <div style={{ textAlign: "center", padding: 8, borderRadius: 8, background: "var(--surface)" }}>
-              <div className="muted">当前评级</div>
+              <div className="muted">{t("coach.rank")}</div>
               <div style={{ fontSize: 28, fontWeight: 800, color: rank === "S" ? "#f59e0b" : "#60a5fa" }}>
                 {totalChecks > 0 ? rank : "-"}
               </div>
             </div>
             <div style={{ textAlign: "center", padding: 8, borderRadius: 8, background: "var(--surface)" }}>
-              <div className="muted">音准命中率</div>
+              <div className="muted">{t("coach.accuracy")}</div>
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>
                 {accuracyPct.toFixed(0)}%
               </div>
             </div>
             <div style={{ textAlign: "center", padding: 8, borderRadius: 8, background: "var(--surface)" }}>
-              <div className="muted">最高连击</div>
+              <div className="muted">{t("coach.maxCombo")}</div>
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "#38bdf8" }}>
                 {maxCombo}
               </div>
@@ -402,7 +403,7 @@ export const PracticeCoachView: React.FC<Props> = ({
           </div>
 
           <div className="muted" style={{ fontSize: 11.5 }}>
-            目标音符：{activeNote ? `${NOTE_NAMES_SHARP[activeNote.pitch % 12]}${Math.floor(activeNote.pitch / 12) - 1}` : "—"} · 当前倍速：{Math.round(playbackRate * 100)}%
+            {t("coach.target", { note: activeNote ? `${NOTE_NAMES_SHARP[activeNote.pitch % 12]}${Math.floor(activeNote.pitch / 12) - 1}` : "—", rate: Math.round(playbackRate * 100) })}
           </div>
         </div>
       </div>
@@ -427,14 +428,14 @@ export const PracticeCoachView: React.FC<Props> = ({
             <div className="row" style={{ justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
                 <TrendingUp size={14} color="#38bdf8" />
-                <span style={{ fontSize: 12.5, fontWeight: 600 }}>练琴成长趋势（最近 {recent.length} 次）</span>
-                <span className="badge">累计 {records.length} 次</span>
-                <span className="badge ok">最高 {bestAcc.toFixed(0)}%</span>
-                <span className="badge">S 级 ×{sCount}</span>
-                <span className="badge">均速 {avgRate}%</span>
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>{t("coach.trend", { n: recent.length })}</span>
+                <span className="badge">{t("coach.total", { n: records.length })}</span>
+                <span className="badge ok">{t("coach.best", { pct: bestAcc.toFixed(0) })}</span>
+                <span className="badge">{t("coach.sCount", { n: sCount })}</span>
+                <span className="badge">{t("coach.avgRate", { pct: avgRate })}</span>
               </div>
-              <button className="btn btn-sm" onClick={onExportRecordsCsv} title="导出 UTF-8 CSV 练琴日志（Excel / Numbers 兼容）">
-                <Download size={12} /> 导出 .csv
+              <button className="btn btn-sm" onClick={onExportRecordsCsv} title={t("coach.csvTip")}>
+                <Download size={12} /> {t("coach.exportCsv")}
               </button>
             </div>
 
@@ -455,7 +456,7 @@ export const PracticeCoachView: React.FC<Props> = ({
                   {pts.map((p) => (
                     <g key={p.r.id}>
                       <circle cx={p.x} cy={p.y} r={3.6} fill={p.r.rank === "S" ? "#f59e0b" : "#38bdf8"} />
-                      <title>{`${p.r.song_name}: ${p.r.accuracy_pct.toFixed(1)}% (${p.r.rank}级, ${Math.round(p.r.playback_rate * 100)}%速)`}</title>
+                      <title>{t("coach.recordTip", { name: p.r.song_name, acc: p.r.accuracy_pct.toFixed(1), rank: p.r.rank, rate: Math.round(p.r.playback_rate * 100) })}</title>
                     </g>
                   ))}
                 </svg>
@@ -464,7 +465,7 @@ export const PracticeCoachView: React.FC<Props> = ({
 
             <div className="row" style={{ marginBottom: 6 }}>
               <Award size={14} color="#9aa3b2" />
-              <span className="muted">最近练琴记录（本地持久化）</span>
+              <span className="muted">{t("coach.recent")}</span>
             </div>
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
               {records.slice(0, 8).map((r) => (
@@ -480,14 +481,14 @@ export const PracticeCoachView: React.FC<Props> = ({
                   }}
                 >
                   <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-                    <strong style={{ color: r.rank === "S" ? "#f59e0b" : "#93c5fd" }}>{r.rank} 级</strong>
+                    <strong style={{ color: r.rank === "S" ? "#f59e0b" : "#93c5fd" }}>{t("coach.rankSuffix", { rank: r.rank })}</strong>
                     <div className="row" style={{ gap: 6 }}>
                       <span>{r.accuracy_pct.toFixed(0)}%</span>
                       <button
                         className="btn btn-sm"
                         style={{ padding: "1px 4px" }}
                         onClick={() => onDeleteRecord(r.id)}
-                        title="删除该条记录"
+                        title={t("coach.deleteTip")}
                       >
                         <Trash2 size={11} />
                       </button>
@@ -497,7 +498,7 @@ export const PracticeCoachView: React.FC<Props> = ({
                     {r.song_name}
                   </div>
                   <div className="muted" style={{ fontSize: 10.5, marginTop: 2 }}>
-                    连击 {r.max_combo} · {Math.round(r.playback_rate * 100)}% 速
+                    {t("coach.recordMeta", { combo: r.max_combo, rate: Math.round(r.playback_rate * 100) })}
                   </div>
                 </div>
               ))}

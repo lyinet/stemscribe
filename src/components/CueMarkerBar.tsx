@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Bookmark, Plus, Repeat, X } from "lucide-react";
+import { t, type I18nKey } from "../i18n";
 import type { SectionMarker } from "../types/music";
 
 interface Props {
@@ -13,7 +14,14 @@ interface Props {
   onLoopSection: (startSec: number, endSec: number, label: string) => void;
 }
 
-const PRESETS = ["前奏", "主歌", "副歌", "间奏 Solo", "桥段", "尾奏"];
+const PRESET_KEYS: I18nKey[] = [
+  "cue.preset.intro",
+  "cue.preset.verse",
+  "cue.preset.chorus",
+  "cue.preset.solo",
+  "cue.preset.bridge",
+  "cue.preset.outro",
+];
 
 export const CueMarkerBar: React.FC<Props> = ({
   markers,
@@ -25,39 +33,39 @@ export const CueMarkerBar: React.FC<Props> = ({
   onSeek,
   onLoopSection,
 }) => {
-  const [label, setLabel] = useState("副歌");
+  const [presetKey, setPresetKey] = useState<I18nKey>("cue.preset.chorus");
 
   return (
     <div className="card" style={{ padding: "8px 14px" }}>
       <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
         <div className="row">
           <span className="card-title" style={{ fontSize: 13 }}>
-            <Bookmark size={13} /> 段落书签 (K)
+            <Bookmark size={13} /> {t("cue.title")}
           </span>
           <select
             className="select"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
+            value={presetKey}
+            onChange={(e) => setPresetKey(e.target.value as I18nKey)}
             style={{ width: 108, padding: "4px 6px", fontSize: 12 }}
           >
-            {PRESETS.map((p) => (
-              <option key={p} value={p}>
-                {p}
+            {PRESET_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {t(k)}
               </option>
             ))}
           </select>
           <button
             className="btn btn-sm"
             disabled={!hasAudio}
-            onClick={() => onAddMarker(label, currentTime)}
+            onClick={() => onAddMarker(t(presetKey), currentTime)}
           >
-            <Plus size={12} /> 标记 {currentTime.toFixed(1)}s
+            <Plus size={12} /> {t("cue.mark", { t: currentTime.toFixed(1) })}
           </button>
         </div>
 
         <div className="row" style={{ flexWrap: "wrap" }}>
           {markers.length === 0 ? (
-            <span className="muted">播放时按 K 键可快速打段落书签，点击即跳或一键 A-B 循环该段</span>
+            <span className="muted">{t("cue.hint")}</span>
           ) : (
             markers.map((m, idx) => {
               const nextTime =
@@ -76,7 +84,7 @@ export const CueMarkerBar: React.FC<Props> = ({
                     padding: "4px 8px",
                   }}
                 >
-                  <span onClick={() => onSeek(m.time_sec)} title="点击跳转到该段落">
+                  <span onClick={() => onSeek(m.time_sec)} title={t("cue.jumpTip")}>
                     {m.label} · {m.time_sec.toFixed(1)}s
                   </span>
                   <Repeat
@@ -84,7 +92,7 @@ export const CueMarkerBar: React.FC<Props> = ({
                     style={{ opacity: 0.85, color: "#38bdf8" }}
                     onClick={() => onLoopSection(m.time_sec, nextTime, m.label)}
                   >
-                    <title>{`一键 A-B 循环「${m.label}」(${m.time_sec.toFixed(1)}s - ${nextTime.toFixed(1)}s)`}</title>
+                    <title>{t("cue.loopTip", { label: m.label, a: m.time_sec.toFixed(1), b: nextTime.toFixed(1) })}</title>
                   </Repeat>
                   <X
                     size={11}

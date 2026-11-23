@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { translateIssue } from "../../lib/backendI18n";
+import { t } from "../../i18n";
+import type { I18nKey } from "../../i18n";
 import { Download, Eye, Pause, Play, Sparkles, X } from "lucide-react";
 import { adviseRestoration, pickAudioFile, resolveAudioUrl } from "../../lib/tauriApi";
 import type {
@@ -48,16 +51,16 @@ interface Props {
   agentResult: AgentResult | null;
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  analyze: "诊断",
-  stems: "分轨处理",
-  master: "母带",
-  limit: "限幅",
-  write: "写盘",
-  report: "报告",
-  compare_light: "对比 · 轻档",
-  compare_standard: "对比 · 标准档",
-  compare_strong: "对比 · 重档",
+const STAGE_LABEL_KEYS: Record<string, string> = {
+  analyze: "rp.stage.analyze",
+  stems: "rp.stage.stems",
+  master: "rp.stage.master",
+  limit: "rp.stage.limit",
+  write: "rp.stage.write",
+  report: "rp.stage.report",
+  compare_light: "rp.stage.compareLight",
+  compare_standard: "rp.stage.compareStandard",
+  compare_strong: "rp.stage.compareStrong",
 };
 
 type AmountModule =
@@ -79,51 +82,51 @@ type ToneKey =
   | "low_shelf_db"
   | "high_shelf_db";
 
-const MODULE_LABELS: Array<{ key: AmountModule; label: string }> = [
-  { key: "vocal_cleanup", label: "人声清理" },
-  { key: "shimmer", label: "去金属声" },
-  { key: "drum_punch", label: "鼓点冲击" },
-  { key: "low_end", label: "低频收紧" },
-  { key: "width", label: "立体声展宽" },
-  { key: "vocal_space", label: "人声让位" },
-  { key: "hf_restore", label: "补高频" },
-  { key: "glue", label: "整体粘合" },
+const MODULE_LABEL_KEYS: Array<{ key: AmountModule; labelKey: string }> = [
+  { key: "vocal_cleanup", labelKey: "rp.mod.vocalCleanup" },
+  { key: "shimmer", labelKey: "rp.mod.shimmer" },
+  { key: "drum_punch", labelKey: "rp.mod.drumPunch" },
+  { key: "low_end", labelKey: "rp.mod.lowEnd" },
+  { key: "width", labelKey: "rp.mod.width" },
+  { key: "vocal_space", labelKey: "rp.mod.vocalSpace" },
+  { key: "hf_restore", labelKey: "rp.mod.hfRestore" },
+  { key: "glue", labelKey: "rp.mod.glue" },
 ];
 
-const TONE_FIELDS: Array<{ key: ToneKey; label: string }> = [
-  { key: "vocal_level_db", label: "人声音量" },
-  { key: "vocal_presence_db", label: "人声清晰度" },
-  { key: "vocal_air_db", label: "人声空气感" },
-  { key: "low_shelf_db", label: "整体低频" },
-  { key: "high_shelf_db", label: "整体高频" },
+const TONE_FIELDS: Array<{ key: ToneKey; labelKey: string }> = [
+  { key: "vocal_level_db", labelKey: "rp.tone.vocalLevel" },
+  { key: "vocal_presence_db", labelKey: "rp.tone.vocalPresence" },
+  { key: "vocal_air_db", labelKey: "rp.tone.vocalAir" },
+  { key: "low_shelf_db", labelKey: "rp.tone.lowShelf" },
+  { key: "high_shelf_db", labelKey: "rp.tone.highShelf" },
 ];
 
-const CONF_LABELS: Record<string, string> = {
-  low: "置信度：低",
-  medium: "置信度：中",
-  high: "置信度：高",
+const CONF_LABEL_KEYS: Record<string, string> = {
+  low: "rp.conf.low",
+  medium: "rp.conf.medium",
+  high: "rp.conf.high",
 };
 
-const AGENT_STAGE_LABELS: Record<string, string> = {
-  prepare: "准备（解码/诊断）",
-  advise: "AI 参谋思考中",
-  render: "渲染中",
-  score: "评分中",
-  done: "完成",
+const AGENT_STAGE_LABEL_KEYS: Record<string, string> = {
+  prepare: "rp.agent.prepare",
+  advise: "rp.agent.advise",
+  render: "rp.agent.render",
+  score: "rp.agent.score",
+  done: "rp.agent.done",
 };
 
-const STOP_REASON_LABELS: Record<string, string> = {
-  max_rounds: "达到最大轮数",
-  no_changes: "AI 未给出新参数",
-  no_improvement: "连续两轮无提升",
-  target_reached: "评分已达标",
-  advisor_error: "AI 调用失败",
-  render_error: "渲染失败",
-  cancelled: "已手动停止",
+const STOP_REASON_LABEL_KEYS: Record<string, string> = {
+  max_rounds: "rp.stop.maxRounds",
+  no_changes: "rp.stop.noChanges",
+  no_improvement: "rp.stop.noImprovement",
+  target_reached: "rp.stop.targetReached",
+  advisor_error: "rp.stop.advisorError",
+  render_error: "rp.stop.renderError",
+  cancelled: "rp.stop.cancelled",
 };
 
 function fmtAdvisorVal(v: number | boolean): string {
-  return typeof v === "boolean" ? (v ? "开" : "关") : `${v}`;
+  return typeof v === "boolean" ? (v ? t("rp.on") : t("rp.off")) : `${v}`;
 }
 
 const SEV_ORDER: Record<string, number> = { ok: 0, warn: 1, bad: 2 };
@@ -138,12 +141,12 @@ function fmtLufs(v: number): string {
 }
 
 function cutoffLabel(hz: number | null): string {
-  return hz && hz < 19000 ? `${(hz / 1000).toFixed(1)} kHz` : "完整";
+  return hz && hz < 19000 ? `${(hz / 1000).toFixed(1)} kHz` : t("rp.full");
 }
 
 function specLabel(r: QualityReport): string {
   const khz = (r.sample_rate / 1000).toFixed(r.sample_rate % 1000 === 0 ? 0 : 1);
-  const bd = r.bit_depth ? `${r.bit_depth}-bit` : "有损";
+  const bd = r.bit_depth ? `${r.bit_depth}-bit` : t("rp.lossy");
   return `${khz} kHz · ${bd}`;
 }
 
@@ -308,7 +311,7 @@ const SpectrumPlot: React.FC<{
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = cText;
-      ctx.fillText("变化", 2, mid + 3);
+      ctx.fillText(t("rp.delta"), 2, mid + 3);
       ctx.strokeStyle = cAfter;
       ctx.lineWidth = 1.2;
       ctx.beginPath();
@@ -339,20 +342,20 @@ function mergeIssues(before: QualityReport | null, after: QualityReport | null):
     if (iss.severity === "ok") continue;
     seen.add(iss.id);
     if (!after) {
-      rows.push({ issue: iss, state: "before" });
+      rows.push({ issue: translateIssue(iss), state: "before" });
     } else {
       const a = afterMap.get(iss.id);
       if (!a || a.severity === "ok" || SEV_ORDER[a.severity] < SEV_ORDER[iss.severity]) {
-        rows.push({ issue: iss, state: "fixed", afterSeverity: a?.severity });
+        rows.push({ issue: translateIssue(iss), state: "fixed", afterSeverity: a?.severity });
       } else {
-        rows.push({ issue: a, state: "still" });
+        rows.push({ issue: translateIssue(a), state: "still" });
       }
     }
   }
   if (after) {
     for (const iss of after.issues) {
       if (iss.severity === "ok" || seen.has(iss.id)) continue;
-      rows.push({ issue: iss, state: "new" });
+      rows.push({ issue: translateIssue(iss), state: "new" });
     }
   }
   return rows;
@@ -545,10 +548,10 @@ export const RestorePanel: React.FC<Props> = ({
   const duration = sourceDuration || before?.duration_sec || 0;
   const matchLabel =
     Math.abs(matchDb) < 0.1
-      ? "已等响度"
+      ? t("rp.matched")
       : matchDb < 0
-        ? `已等响度：修复后 ${matchDb.toFixed(1)} dB`
-        : `已等响度：原曲 ${(-matchDb).toFixed(1)} dB`;
+        ? t("rp.matchedAfter", { db: matchDb.toFixed(1) })
+        : t("rp.matchedOrig", { db: (-matchDb).toFixed(1) });
 
   const setStrength = (v: number) => onSettingsChange({ ...settings, strength: v });
   const setTarget = (v: number) => onSettingsChange({ ...settings, target_lufs: v });
@@ -567,15 +570,15 @@ export const RestorePanel: React.FC<Props> = ({
 
   const metricRows: Array<{ label: string; before: string; after: string | null }> = before
     ? [
-        { label: "响度", before: `${fmtLufs(before.integrated_lufs)} LUFS`, after: after ? `${fmtLufs(after.integrated_lufs)} LUFS` : null },
-        { label: "动态", before: `${before.lra_lu.toFixed(1)} LU`, after: after ? `${after.lra_lu.toFixed(1)} LU` : null },
-        { label: "真峰值", before: `${before.true_peak_dbtp.toFixed(1)} dBTP`, after: after ? `${after.true_peak_dbtp.toFixed(1)} dBTP` : null },
-        { label: "高频截止", before: cutoffLabel(before.cutoff_hz), after: after ? cutoffLabel(after.cutoff_hz) : null },
-        { label: "规格", before: specLabel(before), after: after ? specLabel(after) : null },
+        { label: t("rp.m.loudness"), before: `${fmtLufs(before.integrated_lufs)} LUFS`, after: after ? `${fmtLufs(after.integrated_lufs)} LUFS` : null },
+        { label: t("rp.m.dynamics"), before: `${before.lra_lu.toFixed(1)} LU`, after: after ? `${after.lra_lu.toFixed(1)} LU` : null },
+        { label: t("rp.m.truePeak"), before: `${before.true_peak_dbtp.toFixed(1)} dBTP`, after: after ? `${after.true_peak_dbtp.toFixed(1)} dBTP` : null },
+        { label: t("rp.m.hfCutoff"), before: cutoffLabel(before.cutoff_hz), after: after ? cutoffLabel(after.cutoff_hz) : null },
+        { label: t("rp.m.spec"), before: specLabel(before), after: after ? specLabel(after) : null },
         ...(result?.reference
           ? [
               {
-                label: "与参考差距",
+                label: t("rp.m.refGap"),
                 before: `${result.reference.distance_before_db.toFixed(1)} dB`,
                 after: `${result.reference.distance_after_db.toFixed(1)} dB`,
               },
@@ -584,7 +587,7 @@ export const RestorePanel: React.FC<Props> = ({
         ...(result?.objective
           ? [
               {
-                label: "规则评分",
+                label: t("rp.m.ruleScore"),
                 before: "—",
                 after: `S = ${result.objective.score.toFixed(2)}`,
               },
@@ -593,14 +596,14 @@ export const RestorePanel: React.FC<Props> = ({
         ...(result?.critic
           ? [
               {
-                label: "AI 评分 PQ",
+                label: t("rp.m.aiScore"),
                 before: result.critic_before
                   ? result.critic_before.pq.toFixed(2)
                   : "—",
                 after:
                   result.critic.pq.toFixed(2) +
                   (result.guard_rung && result.guard_rung !== "full"
-                    ? `（${result.guard_rung === "half" ? "半档" : "仅响度/峰值"}）`
+                    ? `（${result.guard_rung === "half" ? t("rp.guardHalf") : t("rp.guardLoudOnly")}）`
                     : ""),
               },
             ]
@@ -614,8 +617,8 @@ export const RestorePanel: React.FC<Props> = ({
     <div className="restore-panel">
       <div className="rp-grid">
         <section className="rp-col">
-          <div className="rp-title">诊断</div>
-          {!before && <div className="rp-hint">点「开始修复」会先诊断当前歌曲。</div>}
+          <div className="rp-title">{t("rp.diagnosis")}</div>
+          {!before && <div className="rp-hint">{t("rp.diagHint")}</div>}
           {metricRows.map((r) => (
             <div key={r.label} className="rp-metric">
               <span className="rp-metric-label">{r.label}</span>
@@ -634,9 +637,9 @@ export const RestorePanel: React.FC<Props> = ({
                 <div key={`${row.issue.id}_${i}`} className="rp-issue" title={row.issue.detail}>
                   <span className="rp-dot" style={{ background: SEV_COLOR[row.issue.severity] }} />
                   <span className="rp-issue-title">{row.issue.title}</span>
-                  {row.state === "fixed" && <span className="rp-tag ok">已改善</span>}
-                  {row.state === "still" && <span className="rp-tag warn">仍存在</span>}
-                  {row.state === "new" && <span className="rp-tag new">新增</span>}
+                  {row.state === "fixed" && <span className="rp-tag ok">{t("rp.fixed")}</span>}
+                  {row.state === "still" && <span className="rp-tag warn">{t("rp.still")}</span>}
+                  {row.state === "new" && <span className="rp-tag new">{t("rp.new")}</span>}
                 </div>
               ))}
             </div>
@@ -644,26 +647,26 @@ export const RestorePanel: React.FC<Props> = ({
         </section>
 
         <section className="rp-col">
-          <div className="rp-title">频谱</div>
+          <div className="rp-title">{t("rp.spectrum")}</div>
           <SpectrumPlot before={before} after={after} reference={result?.reference?.report ?? null} />
           <div className="rp-legend">
-            <span className="rp-swatch" style={{ background: "var(--text-3)" }} /> 修复前
-            <span className="rp-swatch" style={{ background: "var(--accent)" }} /> 修复后
-            {result?.reference && <span className="rp-swatch dashed" />} {result?.reference ? "参考曲" : null}
+            <span className="rp-swatch" style={{ background: "var(--text-3)" }} /> {t("rp.before")}
+            <span className="rp-swatch" style={{ background: "var(--accent)" }} /> {t("rp.after")}
+            {result?.reference && <span className="rp-swatch dashed" />} {result?.reference ? t("rp.reference") : null}
           </div>
         </section>
 
         <section className="rp-col">
-          <div className="rp-title">修复</div>
+          <div className="rp-title">{t("rp.restore")}</div>
           <div className="rp-row">
-            <span className="rp-label">参考曲</span>
+            <span className="rp-label">{t("rp.reference")}</span>
             {settings.reference_path ? (
               <span className="rp-chip" title={settings.reference_path}>
                 {settings.reference_path.split("/").pop()}
                 <button
                   className="rp-chip-x"
                   disabled={running}
-                  title="清除参考曲"
+                  title={t("rp.clearRef")}
                   onClick={() =>
                     onSettingsChange({ ...settings, reference_path: null })
                   }
@@ -680,7 +683,7 @@ export const RestorePanel: React.FC<Props> = ({
                   if (p) onSettingsChange({ ...settings, reference_path: p });
                 }}
               >
-                选择参考曲…
+                {t("rp.pickRef")}
               </button>
             )}
           </div>
@@ -699,17 +702,17 @@ export const RestorePanel: React.FC<Props> = ({
                     })
                   }
                 />
-                跟随参考响度
+                {t("rp.followRef")}
               </label>
             </div>
           )}
           <div className="rp-row">
-            <span className="rp-label">强度</span>
+            <span className="rp-label">{t("rp.strength")}</span>
             <div className="seg">
               {[
-                { v: 0.5, l: "轻" },
-                { v: 1.0, l: "标准" },
-                { v: 1.5, l: "重" },
+                { v: 0.5, l: t("rp.strength.light") },
+                { v: 1.0, l: t("rp.strength.standard") },
+                { v: 1.5, l: t("rp.strength.heavy") },
               ].map((o) => (
                 <button
                   key={o.v}
@@ -723,11 +726,11 @@ export const RestorePanel: React.FC<Props> = ({
             </div>
           </div>
           <div className="rp-row">
-            <span className="rp-label">目标</span>
+            <span className="rp-label">{t("rp.target")}</span>
             <div className="seg">
               {[
-                { v: -14, l: "−14 LUFS 流媒体" },
-                { v: -12, l: "−12 LUFS 更响" },
+                { v: -14, l: t("rp.target.streaming") },
+                { v: -12, l: t("rp.target.louder") },
               ].map((o) => (
                 <button
                   key={o.v}
@@ -742,10 +745,10 @@ export const RestorePanel: React.FC<Props> = ({
           </div>
           <div className="rp-runrow">
             <button className="btn btn-primary rp-run" disabled={running} onClick={onRun}>
-              <Sparkles size={13} /> {running ? "修复中…" : result ? "重新修复" : "开始修复"}
+              <Sparkles size={13} /> {running ? t("rp.restoring") : result ? t("rp.reRestore") : t("rp.startRestore")}
             </button>
             <button className="btn rp-run" disabled={running} onClick={onRunCompare}>
-              {running ? "对比中…" : "三档对比"}
+              {running ? t("rp.comparing") : t("rp.compare")}
             </button>
           </div>
           {compareResult && compareResult.candidates.length > 0 && (
@@ -758,20 +761,20 @@ export const RestorePanel: React.FC<Props> = ({
                   title={c.warning ?? undefined}
                 >
                   <div className="rp-card-head">
-                    <span className="rp-card-name">{c.strength_label}档</span>
+                    <span className="rp-card-name">{t("rp.strengthCard", { label: c.strength_label })}</span>
                     {i === compareResult.recommended && (
-                      <span className="rp-badge">推荐</span>
+                      <span className="rp-badge">{t("rp.recommended")}</span>
                     )}
                     {c.warning && <span className="rp-badge warn">⚠</span>}
                   </div>
                   <div className="rp-card-row">
-                    问题 {c.after.issues.filter((x) => x.severity !== "ok").length} 个
+                    {t("rp.issues", { n: c.after.issues.filter((x) => x.severity !== "ok").length })}
                   </div>
                   <div className="rp-card-row">
-                    动态 {compareResult.before.lra_lu.toFixed(1)}→{c.after.lra_lu.toFixed(1)} LU
+                    {t("rp.dynamicsDelta", { b: compareResult.before.lra_lu.toFixed(1), a: c.after.lra_lu.toFixed(1) })}
                   </div>
                   <div className="rp-card-row">
-                    评分 {c.objective.score.toFixed(2)}
+                    {t("rp.scoreVal", { s: c.objective.score.toFixed(2) })}
                   </div>
                   <div className="rp-card-row">
                     AI PQ {c.critic ? c.critic.pq.toFixed(2) : "—"}
@@ -779,15 +782,15 @@ export const RestorePanel: React.FC<Props> = ({
                 </button>
               ))}
               <div className="rp-cards-note">
-                {compareResult.reason} · AI 评分差 &lt; 0.1 视为无差别
+                {compareResult.reason} · {t("rp.compareNote")}
               </div>
             </div>
           )}
           <div className="rp-advisor">
-            <div className="rp-subtitle">AI 参谋</div>
+            <div className="rp-subtitle">{t("rp.advisor")}</div>
             <textarea
               className="rp-advisor-text"
-              placeholder="想要什么效果？例如：人声再亮一点、低频别那么轰（可留空）"
+              placeholder={t("rp.advisorPlaceholder")}
               value={advisorText}
               disabled={running || advising}
               onChange={(e) => setAdvisorText(e.target.value)}
@@ -797,31 +800,31 @@ export const RestorePanel: React.FC<Props> = ({
               <button
                 className="btn btn-sm"
                 disabled={running || advising || agentRunning || !llmReady || !before}
-                title={!before ? "先完成一次修复/诊断" : undefined}
+                title={!before ? t("rp.needDiag") : undefined}
                 onClick={askAdvisor}
               >
-                {advising ? "AI 思考中…" : "让 AI 出方案"}
+                {advising ? t("rp.thinking") : t("rp.advise")}
               </button>
               <button
                 className="btn btn-sm"
                 disabled={running || advising || agentRunning || !llmReady || !before}
-                title="让 AI 连续出几轮方案并自动渲染比较，保留评分最好的结果"
+                title={t("rp.agentTip")}
                 onClick={() => onRunAgent(advisorText)}
               >
-                {agentRunning ? "多轮修复中…" : "AI 多轮自动修复（实验性）"}
+                {agentRunning ? t("rp.agentRunning") : t("rp.agent")}
               </button>
               {agentRunning && (
                 <button className="btn btn-sm" onClick={onStopAgent}>
-                  停止
+                  {t("rp.stop")}
                 </button>
               )}
               {!llmReady && (
                 <button className="rp-link" onClick={onOpenAiSettings}>
-                  先在设置里配置 AI 服务
+                  {t("rp.needAiConfig")}
                 </button>
               )}
               {llmReady && !before && (
-                <span className="rp-hint">先运行一次修复后可咨询</span>
+                <span className="rp-hint">{t("rp.needRun")}</span>
               )}
             </div>
             {advisorError && <div className="rp-advisor-err">{advisorError}</div>}
@@ -833,10 +836,10 @@ export const RestorePanel: React.FC<Props> = ({
                     return (
                       <div key={`p${p.round}`} className="rp-agent-row running">
                         <span className="rp-agent-round">
-                          {p.round === 0 ? "基线" : `第 ${p.round} 轮`}
+                          {p.round === 0 ? t("rp.baseline") : t("rp.round", { n: p.round })}
                         </span>
                         <span className="rp-agent-stage">
-                          {AGENT_STAGE_LABELS[p.stage] ?? p.stage} ·{" "}
+                          {AGENT_STAGE_LABEL_KEYS[p.stage] ? t(AGENT_STAGE_LABEL_KEYS[p.stage] as I18nKey) : p.stage} ·{" "}
                           {Math.round(p.percent)}%
                         </span>
                       </div>
@@ -852,15 +855,15 @@ export const RestorePanel: React.FC<Props> = ({
                           )
                           .join("、")
                       : r.round === 0
-                        ? "当前参数"
-                        : "无变更";
+                        ? t("rp.currentParams")
+                        : t("rp.noChanges");
                   return (
                     <div
                       key={`h${r.round}`}
                       className={`rp-agent-row${r.accepted ? "" : " rejected"}`}
                     >
                       <span className="rp-agent-round">
-                        {r.round === 0 ? "基线" : `第 ${r.round} 轮`}
+                        {r.round === 0 ? t("rp.baseline") : t("rp.round", { n: r.round })}
                       </span>
                       <span className="rp-agent-detail">{changeStr}</span>
                       {r.score != null && (
@@ -868,10 +871,10 @@ export const RestorePanel: React.FC<Props> = ({
                       )}
                       <span className="rp-agent-verdict">
                         {r.error
-                          ? `失败：${r.error}`
+                          ? t("rp.failed", { err: r.error })
                           : r.accepted
-                            ? "采用"
-                            : `未采用${r.reject_reason ? `：${r.reject_reason}` : ""}`}
+                            ? t("rp.adopted")
+                            : t("rp.rejectedSuffix", { reason: r.reject_reason ?? "" })}
                       </span>
                     </div>
                   );
@@ -887,14 +890,14 @@ export const RestorePanel: React.FC<Props> = ({
                         .filter((r) => r.round > 0 && !r.accepted)
                         .map(
                           (r) =>
-                            `第 ${r.round} 轮未采用${r.reject_reason ? `：${r.reject_reason}` : r.error ? `：${r.error}` : ""}`,
+                            t("rp.roundRejected", { n: r.round, reason: r.reject_reason ? `：${r.reject_reason}` : r.error ? `：${r.error}` : "" }),
                         )
                         .join("；");
                       return `${
-                        agentResult.best_round === 0 ? "基线" : `第 ${agentResult.best_round} 轮`
-                      }最好：评分 ${s0 != null ? s0.toFixed(2) : "?"} → ${
+                        agentResult.best_round === 0 ? t("rp.baseline") : t("rp.round", { n: agentResult.best_round })
+                      }${t("rp.best", { s0: s0 != null ? s0.toFixed(2) : "?" })} → ${
                         sb != null ? sb.toFixed(2) : agentResult.best.objective?.score.toFixed(2) ?? "?"
-                      }${rej ? `；${rej}` : ""}（${STOP_REASON_LABELS[agentResult.stop_reason] ?? agentResult.stop_reason}）`;
+                      }${rej ? `；${rej}` : ""}（${STOP_REASON_LABEL_KEYS[agentResult.stop_reason] ? t(STOP_REASON_LABEL_KEYS[agentResult.stop_reason] as I18nKey) : agentResult.stop_reason}）`;
                     })()}
                   </div>
                 )}
@@ -903,9 +906,9 @@ export const RestorePanel: React.FC<Props> = ({
             {proposal && (
               <div className="rp-proposal">
                 <div className="rp-proposal-head">
-                  <span className="rp-proposal-title">AI 方案</span>
+                  <span className="rp-proposal-title">{t("rp.proposal")}</span>
                   <span className={`rp-badge conf-${proposal.confidence}`}>
-                    {CONF_LABELS[proposal.confidence] ?? proposal.confidence}
+                    {CONF_LABEL_KEYS[proposal.confidence] ? t(CONF_LABEL_KEYS[proposal.confidence] as I18nKey) : proposal.confidence}
                   </span>
                 </div>
                 {proposal.changes.length > 0 ? (
@@ -920,7 +923,7 @@ export const RestorePanel: React.FC<Props> = ({
                     ))}
                   </ul>
                 ) : (
-                  <div className="rp-hint">AI 认为当前参数无需调整</div>
+                  <div className="rp-hint">{t("rp.noAdjust")}</div>
                 )}
                 {proposal.explanation.length > 0 && (
                   <ul className="rp-proposal-expl">
@@ -945,14 +948,14 @@ export const RestorePanel: React.FC<Props> = ({
                       setProposal(null);
                     }}
                   >
-                    采用并修复
+                    {t("rp.applyAndRestore")}
                   </button>
                   <button
                     className="btn btn-sm"
                     disabled={running}
                     onClick={() => setProposal(null)}
                   >
-                    放弃
+                    {t("rp.discard")}
                   </button>
                 </div>
               </div>
@@ -960,11 +963,10 @@ export const RestorePanel: React.FC<Props> = ({
             {advisorRegress && (
               <div className="rp-regress">
                 <span>
-                  AI 方案的规则评分比之前差（{advisorRegress.prevScore.toFixed(2)} →{" "}
-                  {advisorRegress.newScore.toFixed(2)}），建议放弃
+                  {t("rp.regress", { prev: advisorRegress.prevScore.toFixed(2), next: advisorRegress.newScore.toFixed(2) })}
                 </span>
                 <button className="btn btn-sm" onClick={onRevertAdvisor}>
-                  恢复之前的结果
+                  {t("rp.revertResult")}
                 </button>
               </div>
             )}
@@ -975,16 +977,16 @@ export const RestorePanel: React.FC<Props> = ({
                 <div style={{ width: `${Math.round(progress?.percent ?? 0)}%` }} />
               </div>
               <span className="rp-progress-label">
-                修复中 · {STAGE_LABELS[progress?.stage ?? "analyze"] ?? progress?.stage}
+                {t("rp.progress", { stage: STAGE_LABEL_KEYS[progress?.stage ?? "analyze"] ? t(STAGE_LABEL_KEYS[progress?.stage ?? "analyze"] as I18nKey) : (progress?.stage ?? "") })}
               </span>
             </div>
           )}
           <details className="rp-adv">
-            <summary>高级</summary>
+            <summary>{t("rp.advanced")}</summary>
             <div className="rp-sliders">
-              {MODULE_LABELS.map((mm) => (
+              {MODULE_LABEL_KEYS.map((mm) => (
                 <label key={mm.key} className="rp-slider">
-                  <span className="rp-slider-label">{mm.label}</span>
+                  <span className="rp-slider-label">{t(mm.labelKey as I18nKey)}</span>
                   <input
                     type="range"
                     min={0}
@@ -1001,21 +1003,21 @@ export const RestorePanel: React.FC<Props> = ({
                   </span>
                 </label>
               ))}
-              {TONE_FIELDS.map((t) => (
-                <label key={t.key} className="rp-slider">
-                  <span className="rp-slider-label">{t.label}</span>
+              {TONE_FIELDS.map((fld) => (
+                <label key={fld.key} className="rp-slider">
+                  <span className="rp-slider-label">{t(fld.labelKey as I18nKey)}</span>
                   <input
                     type="range"
                     min={-3}
                     max={3}
                     step={0.5}
                     disabled={running}
-                    value={settings[t.key]}
-                    onChange={(e) => setTone(t.key, Number(e.target.value))}
+                    value={settings[fld.key]}
+                    onChange={(e) => setTone(fld.key, Number(e.target.value))}
                   />
                   <span className="rp-slider-val">
-                    {settings[t.key] > 0 ? "+" : ""}
-                    {settings[t.key]} dB
+                    {settings[fld.key] > 0 ? "+" : ""}
+                    {settings[fld.key]} dB
                   </span>
                 </label>
               ))}
@@ -1028,7 +1030,7 @@ export const RestorePanel: React.FC<Props> = ({
                   disabled={running}
                   onChange={() => toggleModule("loudness")}
                 />
-                响度标准化
+                {t("rp.loudnessNorm")}
               </label>
               <label className="rp-module">
                 <input
@@ -1037,7 +1039,7 @@ export const RestorePanel: React.FC<Props> = ({
                   disabled={running}
                   onChange={() => toggleModule("drum_replace")}
                 />
-                鼓替换（实验性，叠加底鼓 / 军鼓）
+                {t("rp.drumReplace")}
               </label>
               <div className="seg rp-drumseg">
                 {[
@@ -1086,15 +1088,15 @@ export const RestorePanel: React.FC<Props> = ({
             ) : (
               <>
                 <button className={abSel === "orig" ? "on" : ""} onClick={() => selectAb("orig")}>
-                  原曲
+                  {t("rp.original")}
                 </button>
                 <button className={abSel === "rest" ? "on" : ""} onClick={() => selectAb("rest")}>
-                  修复后
+                  {t("rp.after")}
                 </button>
               </>
             )}
           </div>
-          <button className="btn btn-icon" onClick={toggleAb} title={abPlaying ? "暂停" : "播放"}>
+          <button className="btn btn-icon" onClick={toggleAb} title={abPlaying ? t("wave.pause") : t("wave.play")}>
             {abPlaying ? <Pause size={14} /> : <Play size={14} />}
           </button>
           <input
@@ -1133,20 +1135,20 @@ export const RestorePanel: React.FC<Props> = ({
                 }
               }}
             />
-            盲听
+            {t("rp.blind")}
           </label>
           {blind && !revealed && (
             <button className="btn btn-sm" onClick={() => setRevealed(true)}>
-              <Eye size={12} /> 揭晓
+              <Eye size={12} /> {t("rp.reveal")}
             </button>
           )}
           {revealed && blindMap && (
             <span className="rp-reveal">
-              A = {blindMap.a === "orig" ? "原曲" : "修复后"} · B = {blindMap.b === "orig" ? "原曲" : "修复后"}
+              A = {blindMap.a === "orig" ? t("rp.original") : t("rp.after")} · B = {blindMap.b === "orig" ? t("rp.original") : t("rp.after")}
             </span>
           )}
           <span className="rp-ab-export">
-            <span className="rp-label">导出</span>
+            <span className="rp-label">{t("rp.export")}</span>
             <span className="seg">
               {([24, 16] as const).map((d) => (
                 <button
@@ -1159,7 +1161,7 @@ export const RestorePanel: React.FC<Props> = ({
               ))}
             </span>
             <button className="btn btn-sm" onClick={() => onExport(exportDepth)}>
-              <Download size={12} /> 导出 WAV
+              <Download size={12} /> {t("rp.exportWav")}
             </button>
           </span>
         </div>

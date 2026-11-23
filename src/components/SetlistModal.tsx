@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ArrowDown, ArrowUp, ListMusic, Play, Plus, Trash2, X } from "lucide-react";
+import { t } from "../i18n";
 import type { Setlist, SetlistItem } from "../types/music";
 
 interface Props {
@@ -36,7 +37,7 @@ export const SetlistModal: React.FC<Props> = ({
     setlists.find((s) => s.id === (selectedId ?? activeSetlistId)) ?? setlists[0] ?? null;
 
   const handleCreate = () => {
-    const trimmed = newName.trim() || `演出歌单 ${setlists.length + 1}`;
+    const trimmed = newName.trim() || t("setlist.defaultName", { n: setlists.length + 1 });
     const created: Setlist = {
       id: `setlist_${Date.now()}`,
       name: trimmed,
@@ -82,7 +83,7 @@ export const SetlistModal: React.FC<Props> = ({
       >
         <div className="card-header">
           <div className="card-title">
-            <ListMusic size={16} /> 演出歌单 / 练琴曲单（Setlist 管理）
+            <ListMusic size={16} /> {t("setlist.title")}
           </div>
           <button className="btn btn-sm" onClick={onClose}>
             <X size={14} />
@@ -92,13 +93,13 @@ export const SetlistModal: React.FC<Props> = ({
         <div className="row" style={{ marginBottom: 14 }}>
           <input
             className="input"
-            placeholder="新建歌单名称，例如：周五 Livehouse 歌单 / 本周吉他练习..."
+            placeholder={t("setlist.newPlaceholder")}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
           />
           <button className="btn btn-primary" style={{ whiteSpace: "nowrap" }} onClick={handleCreate}>
-            <Plus size={14} /> 新建歌单
+            <Plus size={14} /> {t("setlist.create")}
           </button>
         </div>
 
@@ -106,7 +107,7 @@ export const SetlistModal: React.FC<Props> = ({
           {/* Left: Setlist list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {setlists.length === 0 ? (
-              <div className="muted">还没有歌单，先新建一个吧。</div>
+              <div className="muted">{t("setlist.empty")}</div>
             ) : (
               setlists.map((s) => (
                 <div
@@ -125,7 +126,7 @@ export const SetlistModal: React.FC<Props> = ({
                 >
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
-                    <div className="muted" style={{ fontSize: 11 }}>{s.items.length} 首曲目</div>
+                    <div className="muted" style={{ fontSize: 11 }}>{t("setlist.count", { count: s.items.length })}</div>
                   </div>
                   <button
                     className="btn btn-sm"
@@ -133,7 +134,7 @@ export const SetlistModal: React.FC<Props> = ({
                       e.stopPropagation();
                       onDeleteSetlist(s.id);
                     }}
-                    title="删除歌单"
+                    title={t("setlist.deleteTip")}
                   >
                     <Trash2 size={12} />
                   </button>
@@ -153,7 +154,7 @@ export const SetlistModal: React.FC<Props> = ({
             }}
           >
             {!active ? (
-              <div className="muted">请选择或新建一个歌单。</div>
+              <div className="muted">{t("setlist.none")}</div>
             ) : (
               <>
                 <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
@@ -163,23 +164,23 @@ export const SetlistModal: React.FC<Props> = ({
                       className="btn btn-sm"
                       disabled={!canAddCurrent}
                       onClick={() => onAddCurrentSongToSetlist(active)}
-                      title="自动保存当前工程并加入此歌单"
+                      title={t("setlist.addTip")}
                     >
-                      <Plus size={12} /> 加入当前曲目 ({currentSongName ? currentSongName.slice(0, 12) : "无"})
+                      <Plus size={12} /> {t("setlist.addCurrent", { name: currentSongName ? currentSongName.slice(0, 12) : t("setlist.noSong") })}
                     </button>
                     <button
                       className="btn btn-sm btn-primary"
                       disabled={active.items.length === 0}
                       onClick={() => onStartSetlistSong(active, 0, true)}
                     >
-                      <Play size={12} /> 舞台模式连演
+                      <Play size={12} /> {t("setlist.stageRun")}
                     </button>
                   </div>
                 </div>
 
                 {active.items.length === 0 ? (
                   <div className="muted" style={{ marginTop: 20 }}>
-                    当前歌单为空。加载任意曲目后点击右上角「加入当前曲目」，即可编排演出顺序并在全屏演出模式中一键切歌。
+                    {t("setlist.emptyList")}
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -210,7 +211,7 @@ export const SetlistModal: React.FC<Props> = ({
                           <button
                             className="btn btn-sm"
                             onClick={() => onStartSetlistSong(active, idx, false)}
-                            title="载入此曲目"
+                            title={t("setlist.loadTip")}
                           >
                             <Play size={12} />
                           </button>

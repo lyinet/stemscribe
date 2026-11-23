@@ -23,6 +23,8 @@ import {
   Sparkles,
   Wand2,
 } from "lucide-react";
+import { onLanguageChange, t, useLanguage } from "./i18n";
+import type { I18nKey } from "./i18n";
 import { AiAssistantPanel } from "./components/AiAssistantPanel";
 import { BatchQueueModal } from "./components/BatchQueueModal";
 import { ChordTrack } from "./components/ChordTrack";
@@ -67,6 +69,7 @@ import {
   detectDrumHitsLocal,
   detectKeyLocal,
   detectSongStructureLocal,
+  setMenuLanguage,
   exportAudioSliceWav,
   exportLeadsheetHtml,
   exportLrcFile,
@@ -183,37 +186,37 @@ const STEM_COLORS: Record<string, string> = {
 
 const EDITOR_MIN_H = 180;
 
-const EDITOR_TAB_GROUPS: Array<{ label: string; tabs: Array<{ id: StudioTab; label: string }> }> = [
+const EDITOR_TAB_GROUPS: Array<{ labelKey: I18nKey; tabs: Array<{ id: StudioTab; labelKey: I18nKey }> }> = [
   {
-    label: "母带",
-    tabs: [{ id: "restore", label: "修复" }],
+    labelKey: "app.grp.master",
+    tabs: [{ id: "restore", labelKey: "app.tab.restore" }],
   },
   {
-    label: "编辑",
+    labelKey: "app.grp.edit",
     tabs: [
-      { id: "score", label: "乐谱 / 卷帘" },
-      { id: "chords", label: "和弦" },
-      { id: "drums", label: "鼓组" },
-      { id: "lyrics", label: "歌词" },
-      { id: "mixer", label: "混音" },
+      { id: "score", labelKey: "app.tab.score" },
+      { id: "chords", labelKey: "app.tab.chords" },
+      { id: "drums", labelKey: "app.tab.drums" },
+      { id: "lyrics", labelKey: "app.tab.lyrics" },
+      { id: "mixer", labelKey: "app.tab.mixer" },
     ],
   },
   {
-    label: "练习",
+    labelKey: "app.grp.practice",
     tabs: [
-      { id: "falling", label: "瀑布流" },
-      { id: "instrument", label: "琴键 / 指板" },
-      { id: "coach", label: "跟弹打分" },
-      { id: "cover", label: "翻唱录音" },
+      { id: "falling", labelKey: "app.tab.falling" },
+      { id: "instrument", labelKey: "app.tab.instrument" },
+      { id: "coach", labelKey: "app.tab.coach" },
+      { id: "cover", labelKey: "app.tab.cover" },
     ],
   },
 ];
 
-const REHARM_STYLES: Array<{ id: ReharmonizeStyle; label: string }> = [
-  { id: "jazz_neosoul", label: "爵士 / City Pop" },
-  { id: "folk_open", label: "民谣指弹" },
-  { id: "cinematic_minor", label: "暗黑电影感" },
-  { id: "pop_beginner", label: "新手极简" },
+const REHARM_STYLES: Array<{ id: ReharmonizeStyle; labelKey: I18nKey }> = [
+  { id: "jazz_neosoul", labelKey: "app.reharm.jazz" },
+  { id: "folk_open", labelKey: "app.reharm.folk" },
+  { id: "cinematic_minor", labelKey: "app.reharm.cinematic" },
+  { id: "pop_beginner", labelKey: "app.reharm.pop" },
 ];
 type AppTheme = "dark" | "midnight" | "light";
 
@@ -229,13 +232,16 @@ const DEFAULT_RELAY: LlmRelayConfig = {
 };
 
 const THEME_CYCLE: AppTheme[] = ["dark", "midnight", "light"];
-const THEME_LABELS: Record<AppTheme, string> = {
-  dark: "暗黑录音室",
-  midnight: "午夜靛蓝",
-  light: "明亮纸谱",
+const THEME_LABEL_KEYS: Record<AppTheme, I18nKey> = {
+  dark: "app.theme.dark",
+  midnight: "app.theme.midnight",
+  light: "app.theme.light",
 };
 
 export const App: React.FC = () => {
+  const lang = useLanguage();
+
+  useEffect(() => onLanguageChange((l) => void setMenuLanguage(l)), []);
   const engineRef = useRef<MultiStemAudioEngine | null>(null);
   const midiBridgeRef = useRef<HardwareMidiBridge | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -334,7 +340,7 @@ export const App: React.FC = () => {
   const [transcribingStem, setTranscribingStem] = useState<string | null>(null);
   const [llmLoading, setLlmLoading] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false);
-  const [statusMsg, setStatusMsg] = useState("就绪");
+  const [statusMsg, setStatusMsg] = useState(t("app.ready"));
 
   const [relayConfig, setRelayConfig] = useState<LlmRelayConfig>(() => {
     try {
@@ -358,7 +364,7 @@ export const App: React.FC = () => {
   const applyTheme = (next: AppTheme) => {
     setTheme(next);
     localStorage.setItem("stemscribe_theme", next);
-    setStatusMsg(`已切换界面主题：${THEME_LABELS[next]}`);
+    setStatusMsg(t("app.msg.themeSwitched", { name: t(THEME_LABEL_KEYS[next]) }));
   };
 
   const handleCycleTheme = () => applyTheme(THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length]);
@@ -414,7 +420,7 @@ export const App: React.FC = () => {
         return { ...n, start_sec: start, end_sec: start + dur };
       });
       commitNotes(quantized);
-      setStatusMsg(`已将 ${quantized.length} 个音符量化对齐到 1/${subdiv * 4} 网格。`);
+      setStatusMsg(t("app.msg.quantized", { n: quantized.length, grid: subdiv * 4 }));
     },
     [notes, bpm, commitNotes]
   );
@@ -429,9 +435,9 @@ export const App: React.FC = () => {
       const res = await reharmonizeChordsLocal(base, style);
       setChords(res.chords);
       setActiveReharmStyle(style);
-      setStatusMsg(`已应用「${res.style_label_zh}」和弦重配：${res.description}`);
+      setStatusMsg(t("app.msg.reharmed", { style: res.style_label_zh, desc: res.description }));
     } catch (err) {
-      setStatusMsg(`和弦重配失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.reharmFail", { err: String(err) }));
     }
   };
 
@@ -440,7 +446,7 @@ export const App: React.FC = () => {
     setChords(originalChordsBackup);
     setOriginalChordsBackup(null);
     setActiveReharmStyle(null);
-    setStatusMsg("已还原为原始识别和弦走向。");
+    setStatusMsg(t("app.msg.reharmReverted"));
   };
 
   const handleReverbChange = (preset: ReverbPreset, wet: number) => {
@@ -453,7 +459,7 @@ export const App: React.FC = () => {
     const saved = await saveRecordedTakeWav(songName, label, wavBase64);
     const updated = await listRecordedTakes().catch(() => [saved]);
     setArchivedTakes(updated.length > 0 ? updated : [saved]);
-    setStatusMsg(`已归档叠录 WAV：${saved.file_path}`);
+    setStatusMsg(t("app.msg.takeArchived", { path: saved.file_path }));
     return saved.file_path;
   };
 
@@ -465,7 +471,7 @@ export const App: React.FC = () => {
   ): Promise<string | null> => {
     if (stems.length === 0) return null;
     if (stems.some((s) => isDemoBlobPath(s.file_path))) {
-      setStatusMsg("内置演示曲支持直接导出「干声 WAV」；若需伴奏+人声合轨成品 WAV，请先导入本地音频文件。");
+      setStatusMsg(t("app.msg.demoBounceHint"));
       return null;
     }
     const savePath = await pickWavSavePath(
@@ -478,9 +484,9 @@ export const App: React.FC = () => {
       const enabled = anySolo ? st.solo : !st.muted;
       return { file_path: s.file_path, gain: st.gain, pan: st.pan ?? 0, enabled };
     });
-    setStatusMsg("正在合轨导出成品 WAV…");
+    setStatusMsg(t("app.msg.bouncing"));
     const saved = await mixTakeWithStemsWav(inputs, wavBase64, takeGain, takeOffsetMs, savePath);
-    setStatusMsg(`成品翻唱 WAV 已导出：${saved}`);
+    setStatusMsg(t("app.msg.bounced", { path: saved }));
     return saved;
   };
 
@@ -501,12 +507,12 @@ export const App: React.FC = () => {
         (devices) => setMidiDevices(devices)
       );
       if (devs.length === 0) {
-        setStatusMsg("Web MIDI 已就绪，但暂未检测到外接 USB-MIDI 键盘（插入设备后将自动热连接）。");
+        setStatusMsg(t("app.msg.midiReady"));
       } else {
-        setStatusMsg(`已连接硬件 MIDI 设备：${devs.map((d) => d.name).join(" / ")}`);
+        setStatusMsg(t("app.msg.midiConnected", { names: devs.map((d) => d.name).join(" / ") }));
       }
     } catch (err) {
-      setStatusMsg(`MIDI 接入提示：${String(err)}`);
+      setStatusMsg(t("app.msg.midiErr", { err: String(err) }));
     }
   }, []);
 
@@ -528,15 +534,15 @@ export const App: React.FC = () => {
     setDrumHits(demo.drumHits);
     setLyrics(demo.lyrics);
     setNotes(demo.notes);
-    setActiveStemName("人声");
+    setActiveStemName(t("demo.stem.vocals"));
     setBpm(120);
     setTransposeSemitones(0);
     setCapoFret(0);
     setUndoStack([]);
     setRedoStack([]);
     setMarkers([
-      { id: "demo_m1", label: "副歌入口", time_sec: 8.0 },
-      { id: "demo_m2", label: "第二遍副歌", time_sec: 16.0 },
+      { id: "demo_m1", label: t("app.demo.m1"), time_sec: 8.0 },
+      { id: "demo_m2", label: t("app.demo.m2"), time_sec: 16.0 },
     ]);
     setLoopA(8);
     setLoopB(16);
@@ -555,7 +561,7 @@ export const App: React.FC = () => {
     setIsPlaying(false);
     setCurrentTime(0);
     setStudioTab("falling");
-    setStatusMsg("已载入演示曲《星海漫游》");
+    setStatusMsg(t("app.msg.demoLoaded"));
   }, [eq, reverbPreset, reverbWet, metronomeEnabled]);
 
   const loadAudioByPath = useCallback(
@@ -563,7 +569,7 @@ export const App: React.FC = () => {
       setLoadingAudio(true);
       try {
         revokeDemoBlobs();
-        setStatusMsg("正在分析音频…");
+        setStatusMsg(t("app.msg.analyzing"));
         const meta = await inspectAudioFile(path);
         setAudioMeta(meta);
         setRestoreResult(null);
@@ -591,9 +597,9 @@ export const App: React.FC = () => {
             engineRef.current?.setMetronome(metronomeEnabled, t.bpm);
           })
           .catch(() => setTempoInfo(null));
-        setStatusMsg(`已载入：${meta.file_name} (${meta.duration_sec.toFixed(1)}s)`);
+        setStatusMsg(t("app.msg.loaded", { name: meta.file_name, dur: meta.duration_sec.toFixed(1) }));
       } catch (err) {
-        setStatusMsg(`音频加载失败: ${String(err)}`);
+        setStatusMsg(t("app.msg.loadFail", { err: String(err) }));
       } finally {
         setLoadingAudio(false);
       }
@@ -607,7 +613,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const onUnhandledRejection = (evt: PromiseRejectionEvent) => {
-      setStatusMsg(`后台任务出错: ${String(evt.reason)}`);
+      setStatusMsg(t("app.msg.taskErr", { err: String(evt.reason) }));
     };
     window.addEventListener("unhandledrejection", onUnhandledRejection);
     return () => window.removeEventListener("unhandledrejection", onUnhandledRejection);
@@ -643,7 +649,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     engineRef.current?.setProgressiveRamp(progressiveRampEnabled, (nextRate) => {
       setPlaybackRate(nextRate);
-      setStatusMsg(`渐进提速：当前循环倍速已提升至 ${(nextRate * 100).toFixed(0)}%`);
+      setStatusMsg(t("app.msg.rampUp", { pct: (nextRate * 100).toFixed(0) }));
     });
   }, [progressiveRampEnabled]);
 
@@ -718,9 +724,9 @@ export const App: React.FC = () => {
     if (!savePath) return;
     try {
       const saved = await exportLeadsheetHtml(input, savePath);
-      setStatusMsg(`已导出可打印 A4 弹唱谱 HTML：${saved}`);
+      setStatusMsg(t("app.msg.leadsheetSaved", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出弹唱谱失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.leadsheetFail", { err: String(err) }));
     }
   };
 
@@ -733,9 +739,9 @@ export const App: React.FC = () => {
         maxCombo: record.max_combo,
         rank: record.rank,
       });
-      setStatusMsg(`已保存练琴记录：${record.rank} 级 (${record.accuracy_pct.toFixed(1)}%)`);
+      setStatusMsg(t("app.msg.recordSaved", { rank: record.rank, acc: record.accuracy_pct.toFixed(1) }));
     } catch (err) {
-      setStatusMsg(`保存练琴记录失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.recordFail", { err: String(err) }));
     }
   };
 
@@ -743,9 +749,9 @@ export const App: React.FC = () => {
     try {
       const list = await deleteProjectFile(projectId);
       setRecentProjects(list);
-      setStatusMsg("已从本地工程库删除该工程。");
+      setStatusMsg(t("app.msg.projDeleted"));
     } catch (err) {
-      setStatusMsg(`删除工程失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.projDeleteFail", { err: String(err) }));
     }
   };
 
@@ -753,9 +759,9 @@ export const App: React.FC = () => {
     try {
       const list = await renameProjectFile(projectId, newName);
       setRecentProjects(list);
-      setStatusMsg(`已重命名工程为：${newName}`);
+      setStatusMsg(t("app.msg.projRenamed", { name: newName }));
     } catch (err) {
-      setStatusMsg(`重命名工程失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.projRenameFail", { err: String(err) }));
     }
   };
 
@@ -765,28 +771,28 @@ export const App: React.FC = () => {
     setLoopEnabled(true);
     engineRef.current?.setLoop(true, startSec, endSec);
     engineRef.current?.seek(startSec);
-    setStatusMsg(`已锁定段落循环「${label}」：${startSec.toFixed(1)}s - ${endSec.toFixed(1)}s`);
+    setStatusMsg(t("app.msg.segLocked", { label, a: startSec.toFixed(1), b: endSec.toFixed(1) }));
   };
 
   const handleDeletePracticeRecord = async (recordId: string) => {
     try {
       const updated = await deletePracticeRecord(recordId);
       setPracticeRecords(updated);
-      setStatusMsg("已删除该条练琴记录。");
+      setStatusMsg(t("app.msg.recordDeleted"));
     } catch (err) {
-      setStatusMsg(`删除练琴记录失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.recordDeleteFail", { err: String(err) }));
     }
   };
 
   const handleExportPracticeCsv = async () => {
     if (practiceRecords.length === 0) return;
-    const savePath = await pickCsvSavePath("StemScribe_练琴记录.csv");
+    const savePath = await pickCsvSavePath(t("app.csvFileName"));
     if (!savePath) return;
     try {
       const saved = await exportPracticeRecordsCsv(savePath);
-      setStatusMsg(`已导出练琴成长日志 CSV：${saved}`);
+      setStatusMsg(t("app.msg.csvSaved", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出练琴日志失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.csvFail", { err: String(err) }));
     }
   };
 
@@ -795,7 +801,7 @@ export const App: React.FC = () => {
       const updated = await saveSetlist(sl);
       setSetlists(updated);
     } catch (err) {
-      setStatusMsg(`保存歌单失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.setlistFail", { err: String(err) }));
     }
   };
 
@@ -808,7 +814,7 @@ export const App: React.FC = () => {
         setActiveSetlistIndex(-1);
       }
     } catch (err) {
-      setStatusMsg(`删除歌单失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.setlistDeleteFail", { err: String(err) }));
     }
   };
 
@@ -828,15 +834,15 @@ export const App: React.FC = () => {
             project_id: proj.id,
             song_name: proj.name,
             bpm: proj.bpm,
-            key_label: keyEst?.label ?? "未定调",
+            key_label: keyEst?.label ?? t("app.keyUnknown"),
             capo_fret: capoFret,
           },
         ],
       };
       await handleSaveSetlist(next);
-      setStatusMsg(`已将「${proj.name}」加入歌单「${sl.name}」`);
+      setStatusMsg(t("app.msg.addedToSetlist", { proj: proj.name, sl: sl.name }));
     } catch (err) {
-      setStatusMsg(`加入歌单失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.addSetlistFail", { err: String(err) }));
     }
   };
 
@@ -901,10 +907,10 @@ export const App: React.FC = () => {
         engineRef.current?.loadStems(projectStems, (t) => setCurrentTime(t));
       }
       setStatusMsg(
-        `已恢复工程：${p.name}${stemsStale ? "；分轨文件已失效，请重新分轨" : ""}`
+        t("app.msg.projRestored", { name: p.name, stale: stemsStale ? t("app.msg.stemsStale") : "" })
       );
     } catch (err) {
-      setStatusMsg(`加载工程失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.projLoadFail", { err: String(err) }));
     }
   }, []);
 
@@ -950,13 +956,13 @@ export const App: React.FC = () => {
     const nextEq = eqMap[preset];
     setEq(nextEq);
     engineRef.current?.setMasterEq(nextEq);
-    setStatusMsg(`已切换混音预设：${preset}`);
+    setStatusMsg(t("app.msg.presetSwitched", { name: preset }));
   };
 
   const handleExportLoopSlice = async () => {
     if (!audioMeta || loopB <= loopA + 0.05) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
-      setStatusMsg("当前为内置演示曲，请先导入本地音频文件后再导出 A-B WAV 切片。");
+      setStatusMsg(t("app.msg.demoSlice"));
       return;
     }
     const savePath = await pickWavSavePath(
@@ -964,11 +970,11 @@ export const App: React.FC = () => {
     );
     if (!savePath) return;
     try {
-      setStatusMsg("正在导出 A-B 选区 WAV 切片（含 15ms 防爆音淡入淡出）...");
+      setStatusMsg(t("app.msg.slicing"));
       const saved = await exportAudioSliceWav(audioMeta.file_path, loopA, loopB, savePath);
-      setStatusMsg(`已导出 A-B 切片：${saved}`);
+      setStatusMsg(t("app.msg.sliced", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出切片失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.sliceFail", { err: String(err) }));
     }
   };
 
@@ -977,7 +983,7 @@ export const App: React.FC = () => {
       audioMeta && stems.length === 0
         ? {
             name: "original",
-            label_zh: "原曲",
+            label_zh: t("rp.original"),
             file_path: audioMeta.file_path,
             waveform_peaks: audioMeta.waveform_peaks,
             duration_sec: audioMeta.duration_sec,
@@ -1040,7 +1046,7 @@ export const App: React.FC = () => {
   const handleImportMidiByPath = useCallback(
     async (midiPath: string) => {
       try {
-        setStatusMsg("正在解析本地 MIDI 文件...");
+        setStatusMsg(t("app.msg.parsingMidi"));
         const res = await importMidiFile(midiPath);
         setActiveStemName(res.stem_name);
         setBpm(res.estimated_bpm);
@@ -1049,9 +1055,9 @@ export const App: React.FC = () => {
         commitNotes(res.notes);
         setMidiAuditionEnabled(true);
         setStudioTab("falling");
-        setStatusMsg(`已导入 MIDI「${res.stem_name}」：共 ${res.notes.length} 个音符 (${res.estimated_bpm} BPM)`);
+        setStatusMsg(t("app.msg.midiImported", { name: res.stem_name, n: res.notes.length, bpm: res.estimated_bpm }));
       } catch (err) {
-        setStatusMsg(`导入 MIDI 失败: ${String(err)}`);
+        setStatusMsg(t("app.msg.midiImportFail", { err: String(err) }));
       }
     },
     [commitNotes]
@@ -1069,9 +1075,9 @@ export const App: React.FC = () => {
       const saved = await saveProjectFile(proj);
       const list = await listSavedProjects();
       setRecentProjects(list);
-      setStatusMsg(`工程已保存：${saved}`);
+      setStatusMsg(t("app.msg.projSaved", { path: saved }));
     } catch (err) {
-      setStatusMsg(`保存工程失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.projSaveFail", { err: String(err) }));
     }
   }, [buildCurrentProject]);
 
@@ -1081,11 +1087,11 @@ export const App: React.FC = () => {
     const dir = await pickDirectory();
     if (!dir) return;
     try {
-      setStatusMsg("正在导出练习资料包…");
+      setStatusMsg(t("app.msg.bundling"));
       const outDir = await exportPracticeBundle(proj, keyEst?.label ?? null, dir);
-      setStatusMsg(`资料包已导出至：${outDir}`);
+      setStatusMsg(t("app.msg.bundled", { dir: outDir }));
     } catch (err) {
-      setStatusMsg(`导出资料包失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.bundleFail", { err: String(err) }));
     }
   }, [buildCurrentProject, keyEst]);
 
@@ -1095,9 +1101,9 @@ export const App: React.FC = () => {
     if (!savePath) return;
     try {
       const saved = await exportMidiFile(transposedNotes, bpm, savePath);
-      setStatusMsg(`已导出 MIDI 文件（含移调 ${transposeSemitones}）：${saved}`);
+      setStatusMsg(t("app.msg.midiExported", { t: transposeSemitones, path: saved }));
     } catch (err) {
-      setStatusMsg(`导出 MIDI 失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.midiExportFail", { err: String(err) }));
     }
   }, [transposedNotes, activeStemName, bpm, transposeSemitones]);
 
@@ -1107,16 +1113,16 @@ export const App: React.FC = () => {
     if (!savePath) return;
     try {
       const saved = await exportMidiWithChords(transposedNotes, chords, bpm, savePath);
-      setStatusMsg(`已导出双轨 MIDI（轨 1 主旋律 + 轨 2 和弦伴奏）：${saved}`);
+      setStatusMsg(t("app.msg.midi2Exported", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出双轨 MIDI 失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.midi2Fail", { err: String(err) }));
     }
   }, [transposedNotes, chords, activeStemName, bpm]);
 
   const handleExportMixedWav = useCallback(async () => {
     if (stems.length === 0) return;
     if (stems.some((s) => isDemoBlobPath(s.file_path))) {
-      setStatusMsg("当前为内置演示曲，请先导入本地音频并完成分轨后再导出混音 WAV。");
+      setStatusMsg(t("app.msg.demoMix"));
       return;
     }
     const savePath = await pickWavSavePath(`${audioMeta?.file_name || "backing"}_mix.wav`);
@@ -1128,11 +1134,11 @@ export const App: React.FC = () => {
       return { file_path: s.file_path, gain: st.gain, pan: st.pan ?? 0, enabled };
     });
     try {
-      setStatusMsg("正在导出混音 WAV…");
+      setStatusMsg(t("app.msg.mixing"));
       const saved = await exportMixedWav(inputs, savePath, -1.0, audioMeta?.sample_rate);
-      setStatusMsg(`已导出标准化混音 WAV：${saved}`);
+      setStatusMsg(t("app.msg.mixed", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出混音 WAV 失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.mixFail", { err: String(err) }));
     }
   }, [stems, audioMeta, mixer]);
 
@@ -1285,7 +1291,7 @@ export const App: React.FC = () => {
         e.preventDefault();
         handleTogglePlay();
       } else if (e.key.toLowerCase() === "k" && audioMeta) {
-        handleAddMarker("书签", currentTime);
+        handleAddMarker(t("app.bookmark"), currentTime);
       } else if (e.key === "[") {
         setLoopA(currentTime);
         engineRef.current?.setLoop(loopEnabled, currentTime, loopB);
@@ -1330,13 +1336,13 @@ export const App: React.FC = () => {
   const handleDetectStructure = async () => {
     if (!audioMeta) return;
     setDetectingStructure(true);
-    setStatusMsg("正在识别曲式段落…");
+    setStatusMsg(t("app.msg.detectingStructure"));
     try {
       const segs = await detectSongStructureLocal(audioMeta.file_path);
       setStructure(segs);
-      setStatusMsg(`曲式分析完成：共识别 ${segs.length} 个段落，双击任意段落即可设为 A-B 循环。`);
+      setStatusMsg(t("app.msg.structureDone", { n: segs.length }));
     } catch (err) {
-      setStatusMsg(`曲式分析失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.structureFail", { err: String(err) }));
     } finally {
       setDetectingStructure(false);
     }
@@ -1345,7 +1351,7 @@ export const App: React.FC = () => {
   const handleDetectChords = async () => {
     if (!audioMeta) return;
     setDetectingChords(true);
-    setStatusMsg("正在识别和弦与调性…");
+    setStatusMsg(t("app.msg.detectingChords"));
     try {
       const [res, keyRes] = await Promise.all([
         detectChordsLocal(audioMeta.file_path, 2.0),
@@ -1355,9 +1361,9 @@ export const App: React.FC = () => {
       setOriginalChordsBackup(null);
       setActiveReharmStyle(null);
       setKeyEst(keyRes);
-      setStatusMsg(`识别完成：${keyRes.label} · 共检测到 ${res.length} 个和弦段落。`);
+      setStatusMsg(t("app.msg.chordsDone", { key: keyRes.label, n: res.length }));
     } catch (err) {
-      setStatusMsg(`和弦识别失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.chordsFail", { err: String(err) }));
     } finally {
       setDetectingChords(false);
     }
@@ -1367,13 +1373,13 @@ export const App: React.FC = () => {
     const drumStem = stems.find((s) => s.name === "drums");
     if (!drumStem) return;
     setDetectingDrums(true);
-    setStatusMsg("正在识别鼓组节奏…");
+    setStatusMsg(t("app.msg.detectingDrums"));
     try {
       const hits = await detectDrumHitsLocal(drumStem.file_path);
       setDrumHits(hits);
-      setStatusMsg(`鼓组节奏识别完成：共检测到 ${hits.length} 个底鼓/军鼓/踩镲打击点。`);
+      setStatusMsg(t("app.msg.drumsDone", { n: hits.length }));
     } catch (err) {
-      setStatusMsg(`鼓组识别失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.drumsFail", { err: String(err) }));
     } finally {
       setDetectingDrums(false);
     }
@@ -1392,9 +1398,9 @@ export const App: React.FC = () => {
     }));
     try {
       const saved = await exportMidiFile(drumNotes, bpm, savePath);
-      setStatusMsg(`已导出鼓组 MIDI：${saved}`);
+      setStatusMsg(t("app.msg.drumMidiSaved", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出鼓组 MIDI 失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.drumMidiFail", { err: String(err) }));
     }
   };
 
@@ -1403,13 +1409,13 @@ export const App: React.FC = () => {
     const vocalStem = stems.find((s) => s.name === "vocals");
     const targetPath = vocalStem ? vocalStem.file_path : audioMeta.file_path;
     setExtractingLyrics(true);
-    setStatusMsg("正在提取并对齐人声歌词时间轴...");
+    setStatusMsg(t("app.msg.extractingLyrics"));
     try {
       const lines = await extractLyricsWithRelay(targetPath, useWhisper, relayConfig);
       setLyrics(lines);
-      setStatusMsg(`歌词提取完成：共对齐 ${lines.length} 句歌词。`);
+      setStatusMsg(t("app.msg.lyricsDone", { n: lines.length }));
     } catch (err) {
-      setStatusMsg(`歌词提取失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.lyricsFail", { err: String(err) }));
     } finally {
       setExtractingLyrics(false);
     }
@@ -1420,9 +1426,9 @@ export const App: React.FC = () => {
       const parsed = await importLrcFile(filePath);
       setLyrics(parsed);
       setStudioTab("lyrics");
-      setStatusMsg(`已导入本地 LRC 歌词：共 ${parsed.length} 句，支持实时打点微调与导出 .srt。`);
+      setStatusMsg(t("app.msg.lrcImported", { n: parsed.length }));
     } catch (err) {
-      setStatusMsg(`导入 LRC 失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.lrcFail", { err: String(err) }));
     }
   }, []);
 
@@ -1461,9 +1467,9 @@ export const App: React.FC = () => {
     if (!savePath) return;
     try {
       const saved = await exportLrcFile(audioMeta?.file_name || "StemScribe", lyrics, savePath);
-      setStatusMsg(`已导出 LRC 歌词文件：${saved}`);
+      setStatusMsg(t("app.msg.lrcSaved", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出 LRC 失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.lrcExportFail", { err: String(err) }));
     }
   };
 
@@ -1473,9 +1479,9 @@ export const App: React.FC = () => {
     if (!savePath) return;
     try {
       const saved = await exportSrtFile(lyrics, savePath);
-      setStatusMsg(`已导出 SRT 视频字幕（兼容剪映 / FCP / B 站）：${saved}`);
+      setStatusMsg(t("app.msg.srtSaved", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出 SRT 失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.srtFail", { err: String(err) }));
     }
   };
 
@@ -1497,15 +1503,15 @@ export const App: React.FC = () => {
     }
     const message =
       kind === "demucs"
-        ? "AI 分轨需要下载 HTDemucs 模型（约 166 MB，只需一次，之后完全离线运行）。现在打开模型管理器下载吗？"
+        ? t("app.needModel.demucs")
         : kind === "demucs_ft_vocals"
-          ? "高质量分轨需要额外下载 HTDemucs-FT 人声专家模型（约 166 MB，只需一次）。现在打开模型管理器下载吗？"
-          : "扒谱需要下载 Basic Pitch 模型（约 230 KB）。现在下载吗？";
-    const yes = await askConfirm(message, "需要下载 AI 模型");
+          ? t("app.needModel.demucsFt")
+          : t("app.needModel.bp");
+    const yes = await askConfirm(message, t("app.needModel.title"));
     if (yes) {
       setShowModelModal(true);
     } else {
-      setStatusMsg("已取消：缺少本地 AI 模型，可在「设置 → 模型」中随时下载。");
+      setStatusMsg(t("app.msg.modelCancelled"));
     }
     return false;
   };
@@ -1544,17 +1550,17 @@ export const App: React.FC = () => {
   const handleSeparateStems = async () => {
     if (!audioMeta) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
-      setStatusMsg("内置演示曲已自带 4 条独立音轨，无需再次分轨。");
+      setStatusMsg(t("app.msg.demoHasStems"));
       return;
     }
     if (!(await ensureModelInstalled("demucs"))) return;
     setSeparating(true);
-    setStatusMsg("正在 AI 4 轨分离（耗时约为歌曲时长的一半到三分之二）...");
+    setStatusMsg(t("app.msg.separating"));
     try {
       await performSeparation(audioMeta.file_path);
-      setStatusMsg("4 轨分离完成");
+      setStatusMsg(t("app.msg.separated"));
     } catch (err) {
-      setStatusMsg(`分轨失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.separateFail", { err: String(err) }));
     } finally {
       setSeparating(false);
     }
@@ -1565,12 +1571,12 @@ export const App: React.FC = () => {
     let useStems = stems;
     if (useStems.length === 0) {
       const yes = await askConfirm(
-        "先用 AI 分轨再修复，效果更好（耗时约为歌曲时长的一半到三分之二）。要先分轨吗？",
-        "一键修复"
+        t("app.sepFirstPrompt"),
+        t("app.oneClick")
       );
       if (yes && audioMeta && (await ensureModelInstalled("demucs"))) {
         setSeparating(true);
-        setStatusMsg("正在 AI 4 轨分离（耗时约为歌曲时长的一半到三分之二）...");
+        setStatusMsg(t("app.msg.separating"));
         try {
           useStems = await performSeparation(audioMeta.file_path);
         } finally {
@@ -1591,7 +1597,7 @@ export const App: React.FC = () => {
   const handleRestore = async (settingsOverride?: RestoreSettings) => {
     if (!audioMeta || restoring) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
-      setStatusMsg("演示曲不支持修复，请导入自己的歌曲。");
+      setStatusMsg(t("app.msg.demoNoRestore"));
       return;
     }
     const effSettings = settingsOverride ?? restoreSettings;
@@ -1599,7 +1605,7 @@ export const App: React.FC = () => {
     setEditorOpen(true);
     try {
       if (!qualityBefore) {
-        setStatusMsg("音质诊断中…");
+        setStatusMsg(t("app.msg.diagnosing"));
         setQualityBefore(await analyzeAudioQuality(audioMeta.file_path));
       }
       const useStems = await ensureStemsForRestore();
@@ -1626,7 +1632,7 @@ export const App: React.FC = () => {
             ? { prevResult: prev.result, prevScore: prev.score, newScore: res.objective.score }
             : null,
         );
-        setStatusMsg(`修复完成：${res.output_path.split("/").pop()}`);
+        setStatusMsg(t("app.msg.restored", { name: res.output_path.split("/").pop() ?? "" }));
       } finally {
         unlisten();
         setRestoring(false);
@@ -1635,7 +1641,7 @@ export const App: React.FC = () => {
     } catch (err) {
       setRestoring(false);
       setRestoreProgress(null);
-      setStatusMsg(`修复失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.restoreFail", { err: String(err) }));
     }
   };
 
@@ -1670,14 +1676,14 @@ export const App: React.FC = () => {
   const handleRunAgent = async (userRequest: string) => {
     if (!audioMeta || restoring || agentRunning) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
-      setStatusMsg("演示曲不支持修复，请导入自己的歌曲。");
+      setStatusMsg(t("app.msg.demoNoRestore"));
       return;
     }
     setStudioTab("restore");
     setEditorOpen(true);
     try {
       if (!qualityBefore) {
-        setStatusMsg("音质诊断中…");
+        setStatusMsg(t("app.msg.diagnosing"));
         setQualityBefore(await analyzeAudioQuality(audioMeta.file_path));
       }
       const useStems = await ensureStemsForRestore();
@@ -1717,7 +1723,7 @@ export const App: React.FC = () => {
         setRestoreResult(res.best);
         setQualityBefore(res.best.before);
         setStatusMsg(
-          `多轮修复完成：${res.best_round === 0 ? "基线" : `第 ${res.best_round} 轮`} 最好`
+          t("app.msg.agentDone", { round: res.best_round === 0 ? t("rp.baseline") : t("rp.round", { n: res.best_round }) })
         );
       } finally {
         unlisten();
@@ -1725,7 +1731,7 @@ export const App: React.FC = () => {
       }
     } catch (err) {
       setAgentRunning(false);
-      setStatusMsg(`多轮修复失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.agentFail", { err: String(err) }));
     }
   };
 
@@ -1784,14 +1790,14 @@ export const App: React.FC = () => {
   const handleRestoreCompare = async () => {
     if (!audioMeta || restoring) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
-      setStatusMsg("演示曲不支持修复，请导入自己的歌曲。");
+      setStatusMsg(t("app.msg.demoNoRestore"));
       return;
     }
     setStudioTab("restore");
     setEditorOpen(true);
     try {
       if (!qualityBefore) {
-        setStatusMsg("音质诊断中…");
+        setStatusMsg(t("app.msg.diagnosing"));
         setQualityBefore(await analyzeAudioQuality(audioMeta.file_path));
       }
       const useStems = await ensureStemsForRestore();
@@ -1814,7 +1820,7 @@ export const App: React.FC = () => {
         setRestoreResult(candidateAsResult(cmp, cmp.recommended));
         setQualityBefore(cmp.before);
         setStatusMsg(
-          `三档对比完成：推荐${cmp.candidates[cmp.recommended].strength_label}档（${cmp.reason}）`
+          t("app.msg.compareDone", { label: cmp.candidates[cmp.recommended].strength_label, reason: cmp.reason })
         );
       } finally {
         unlisten();
@@ -1824,7 +1830,7 @@ export const App: React.FC = () => {
     } catch (err) {
       setRestoring(false);
       setRestoreProgress(null);
-      setStatusMsg(`三档对比失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.compareFail", { err: String(err) }));
     }
   };
 
@@ -1840,7 +1846,7 @@ export const App: React.FC = () => {
       const picked = await pickStemFiles();
       if (picked) setImportStemsDraft(picked);
     } catch (err) {
-      setStatusMsg(`选择分轨失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.pickStemsFail", { err: String(err) }));
     }
   };
   const handleImportStemsRef = useRef(handleImportStems);
@@ -1851,7 +1857,7 @@ export const App: React.FC = () => {
     mixPath: string | null
   ) => {
     setImportStemsDraft(null);
-    setStatusMsg("正在导入分轨…");
+    setStatusMsg(t("app.msg.importingStems"));
     try {
       const imp = await importStemsAsMix(rows, mixPath);
       await loadAudioByPath(imp.mix_path);
@@ -1870,31 +1876,31 @@ export const App: React.FC = () => {
       setStatusMsg(
         imp.notes.length > 0
           ? imp.notes.join("；")
-          : `已导入 ${imp.stems.length} 条分轨`
+          : t("app.msg.stemsImported", { n: imp.stems.length })
       );
     } catch (err) {
-      setStatusMsg(`导入分轨失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.importStemsFail", { err: String(err) }));
     }
   };
 
   const handleExportRestored = async (bitDepth: 24 | 16) => {
     if (!restoreResult) return;
     const base = (audioMeta?.file_name || "song").replace(/\.[^.]+$/, "");
-    const savePath = await pickWavSavePath(`${base}_修复版.wav`);
+    const savePath = await pickWavSavePath(`${base}${t("app.fixedSuffix")}.wav`);
     if (!savePath) return;
     try {
-      setStatusMsg("正在导出…");
+      setStatusMsg(t("app.msg.exporting"));
       const out = await exportRestoredWav(restoreResult.output_path, savePath, bitDepth);
-      setStatusMsg(`已导出修复版 WAV（${bitDepth}-bit）：${out}`);
+      setStatusMsg(t("app.msg.fixedExported", { bits: bitDepth, path: out }));
     } catch (err) {
-      setStatusMsg(`导出失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.exportFail", { err: String(err) }));
     }
   };
 
   const handleSmartAutoPipeline = async () => {
     if (!audioMeta) return;
     if (isDemoBlobPath(audioMeta.file_path)) {
-      setStatusMsg("内置演示曲已预置完整 4 轨、和弦、曲式与乐谱；拖入任意本地音频即可体验一键全自动扒带。");
+      setStatusMsg(t("app.msg.demoPipelineHint"));
       return;
     }
     if (!(await ensureModelInstalled("demucs"))) return;
@@ -1902,7 +1908,7 @@ export const App: React.FC = () => {
       highQualitySep && (await ensureModelInstalled("demucs_ft_vocals")) ? "high" : "standard";
     setAutoPipelining(true);
     try {
-      setStatusMsg("一键扒带 1/4 · AI 分轨中…");
+      setStatusMsg(t("app.msg.pipe1"));
       const resStems = await separateStems(audioMeta.file_path, sepQuality);
       setStems(resStems);
       const initMixer: Record<string, StemMixerState> = {};
@@ -1915,7 +1921,7 @@ export const App: React.FC = () => {
       engineRef.current?.setMasterEq(eq);
       engineRef.current?.setReverb(reverbPreset, reverbWet);
 
-      setStatusMsg("一键扒带 2/4 · 识别和弦、调性与段落…");
+      setStatusMsg(t("app.msg.pipe2"));
       const [resChords, resKey, resStruct] = await Promise.all([
         detectChordsLocal(audioMeta.file_path, 2.0),
         detectKeyLocal(audioMeta.file_path),
@@ -1929,7 +1935,7 @@ export const App: React.FC = () => {
 
       const drumStem = resStems.find((s) => s.name === "drums");
       if (drumStem) {
-        setStatusMsg("一键扒带 3/4 · 识别鼓组节奏…");
+        setStatusMsg(t("app.msg.pipe3"));
         const hits = await detectDrumHitsLocal(drumStem.file_path);
         setDrumHits(hits);
       }
@@ -1948,8 +1954,8 @@ export const App: React.FC = () => {
       if (melodyStem && (await ensureModelInstalled("basic_pitch"))) {
         setStatusMsg(
           vocalsWeak
-            ? `一键扒带 4/4 · 未检测到人声，改为转录「${melodyStem.label_zh}」旋律…`
-            : `一键扒带 4/4 · 转录「${melodyStem.label_zh}」…`
+            ? t("app.msg.pipe4NoVocal", { stem: melodyStem.label_zh })
+            : t("app.msg.pipe4", { stem: melodyStem.label_zh })
         );
         const tr = await transcribeStemToMidi(melodyStem.file_path, melodyStem.name);
         setActiveStemName(melodyStem.label_zh);
@@ -1957,9 +1963,9 @@ export const App: React.FC = () => {
         commitNotes(tr.notes);
       }
 
-      setStatusMsg("扒带完成");
+      setStatusMsg(t("app.msg.pipeDone"));
     } catch (err) {
-      setStatusMsg(`自动扒带中断: ${String(err)}`);
+      setStatusMsg(t("app.msg.pipeFail", { err: String(err) }));
     } finally {
       setAutoPipelining(false);
     }
@@ -1982,16 +1988,16 @@ export const App: React.FC = () => {
   const handleTranscribe = async (stem: StemOutput) => {
     if (!(await ensureModelInstalled("basic_pitch"))) return;
     setTranscribingStem(stem.name);
-    setStatusMsg(`正在使用 Basic Pitch 本地转录「${stem.label_zh}」...`);
+    setStatusMsg(t("app.msg.transcribing", { stem: stem.label_zh }));
     try {
       const res = await transcribeStemToMidi(stem.file_path, stem.name);
       setActiveStemName(stem.label_zh);
       setBpm(res.estimated_bpm);
       engineRef.current?.setMetronome(metronomeEnabled, res.estimated_bpm);
       commitNotes(res.notes);
-      setStatusMsg(`转谱完成：识别到 ${res.notes.length} 个音符 (BPM ≈ ${res.estimated_bpm})`);
+      setStatusMsg(t("app.msg.transcribed", { n: res.notes.length, bpm: res.estimated_bpm }));
     } catch (err) {
-      setStatusMsg(`转谱失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.transcribeFail", { err: String(err) }));
     } finally {
       setTranscribingStem(null);
     }
@@ -2009,16 +2015,16 @@ export const App: React.FC = () => {
         bpm,
         savePath
       );
-      setStatusMsg(`已导出 MusicXML 4.0 乐谱：${saved}`);
+      setStatusMsg(t("app.msg.mxmlSaved", { path: saved }));
     } catch (err) {
-      setStatusMsg(`导出 MusicXML 失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.mxmlFail", { err: String(err) }));
     }
   };
 
   const handleAnalyzeArrangement = async (useLoopSlice: boolean) => {
     if (!audioMeta) return;
     setLlmLoading(true);
-    setStatusMsg("正在压缩音频并通过第三方中转平台分析编曲...");
+    setStatusMsg(t("app.msg.llmAnalyzing"));
     try {
       const res = await analyzeArrangementWithLlm(
         audioMeta.file_path,
@@ -2028,9 +2034,9 @@ export const App: React.FC = () => {
         relayConfig
       );
       setAnalysis(res);
-      setStatusMsg("多模态编曲拆解完成。");
+      setStatusMsg(t("app.msg.llmDone"));
     } catch (err) {
-      setStatusMsg(`大模型分析失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.llmFail", { err: String(err) }));
     } finally {
       setLlmLoading(false);
     }
@@ -2043,7 +2049,7 @@ export const App: React.FC = () => {
   ) => {
     if (!audioMeta || notes.length === 0) return;
     setLlmLoading(true);
-    setStatusMsg("正在结合音频与初版 MIDI 进行乐理校对与智能修谱...");
+    setStatusMsg(t("app.msg.refining"));
     try {
       const res = await refineMidiWithLlm(
         audioMeta.file_path,
@@ -2059,9 +2065,9 @@ export const App: React.FC = () => {
       commitNotes(res.cleaned_notes);
       setRefineSummary(res.summary);
       setFingeringTips(res.guitar_fingering_tips);
-      setStatusMsg("智能修谱完成，钢琴卷帘与乐谱视图已更新（支持 Cmd+Z 撤销）。");
+      setStatusMsg(t("app.msg.refined"));
     } catch (err) {
-      setStatusMsg(`智能修谱失败: ${String(err)}`);
+      setStatusMsg(t("app.msg.refineFail", { err: String(err) }));
     } finally {
       setLlmLoading(false);
     }
@@ -2069,39 +2075,39 @@ export const App: React.FC = () => {
 
 
   const paletteCommands: PaletteCommand[] = [
-    { id: "demo", category: "入门", label: "体验内置 4 轨演示曲（星海漫游）", shortcut: "Cmd+D", run: handleLoadDemoSong },
-    { id: "open_audio", category: "文件", label: "导入本地音频文件...", shortcut: "Cmd+O", run: handleOpenAudio },
-    { id: "import_midi", category: "文件", label: "导入本地 MIDI 乐谱 (.mid)...", shortcut: "Cmd+I", run: handleImportMidi },
-    { id: "import_lrc", category: "文件", label: "导入本地 LRC 歌词时间轴 (.lrc)...", run: handleImportLrc },
-    { id: "export_srt", category: "导出", label: "导出翻唱视频标准字幕 (.srt)", disabled: lyrics.length === 0, run: handleExportSrt },
-    { id: "export_practice_csv", category: "导出", label: "导出练琴成长历史日志 (.csv)", disabled: practiceRecords.length === 0, run: handleExportPracticeCsv },
-    { id: "restore", category: "AI 引擎", label: "一键修复音质（分轨修复 + 母带导出）", shortcut: "Cmd+R", disabled: !audioMeta, run: handleRestore },
-    { id: "auto_pipe", category: "AI 引擎", label: "一键全自动扒带（4轨+和弦+曲式+鼓组+转谱）", disabled: !audioMeta, run: handleSmartAutoPipeline },
-    { id: "stage", category: "舞台", label: "进入 / 退出全屏演出提词器模式", shortcut: "F", disabled: !audioMeta, run: () => setStageModeOpen((v) => !v) },
-    { id: "setlist", category: "舞台", label: "打开演出歌单 / Setlist 管理", shortcut: "Cmd+L", run: () => setShowSetlistModal(true) },
-    { id: "leadsheet", category: "导出", label: "A4 吉他弹唱和弦谱排版 / 打印", shortcut: "Cmd+P", disabled: !audioMeta, run: () => setShowLeadSheetModal(true) },
-    { id: "share", category: "导出", label: "生成小红书 / B 站高清分享卡片", disabled: !audioMeta, run: () => setShowShareModal(true) },
-    { id: "bundle", category: "导出", label: "一键导出完整扒带资料包", shortcut: "Cmd+Shift+E", disabled: !audioMeta, run: handleExportBundle },
-    { id: "midi2", category: "导出", label: "导出双轨主旋律+和弦 MIDI (.mid)", disabled: transposedNotes.length === 0 || chords.length === 0, run: handleExportMidiWithChords },
-    { id: "tab_falling", category: "视图", label: "切换到：Synthesia 瀑布流跟弹视图", run: () => setStudioTab("falling") },
-    { id: "tab_inst", category: "视图", label: "切换到：实时交互琴键与吉他指板", run: () => setStudioTab("instrument") },
-    { id: "tab_coach", category: "视图", label: "切换到：AI 练琴教练与实时调音打分", run: () => setStudioTab("coach") },
-    { id: "tab_cover", category: "视图", label: "切换到：伴奏叠录翻唱棚与合轨导出", run: () => setStudioTab("cover") },
-    { id: "tab_score", category: "视图", label: "切换到：VexFlow 五线谱与钢琴卷帘", run: () => setStudioTab("score") },
-    { id: "tab_drums", category: "视图", label: "切换到：鼓组 16 步进视图", run: () => setStudioTab("drums") },
-    { id: "tab_lyrics", category: "视图", label: "切换到：人声歌词时间轴", run: () => setStudioTab("lyrics") },
-    { id: "reharm_jazz", category: "和弦", label: "一键重配和弦：爵士 / City Pop 色彩", disabled: chords.length === 0, run: () => handleReharmonize("jazz_neosoul") },
-    { id: "reharm_folk", category: "和弦", label: "一键重配和弦：民谣指弹清新", disabled: chords.length === 0, run: () => handleReharmonize("folk_open") },
-    { id: "usb_midi", category: "硬件", label: "连接外接 USB-MIDI 键盘 / 电钢琴", run: handleConnectMidi },
-    { id: "theme", category: "外观", label: `切换视觉主题（当前：${THEME_LABELS[theme]}）`, run: handleCycleTheme },
-    { id: "focus", category: "外观", label: aiPanelOpen ? "隐藏右侧 AI 助手面板" : "显示右侧 AI 助手面板", run: () => setAiPanelOpen((v) => !v) },
-    { id: "settings", category: "设置", label: "打开设置（主题 / AI 服务 / 模型 / MIDI）", shortcut: "Cmd+,", run: () => openSettings("general") },
-    { id: "tab_chords", category: "视图", label: "切换到：和弦编辑与风格重配", run: () => setStudioTab("chords") },
-    { id: "tab_mixer", category: "视图", label: "切换到：混音台（EQ / 混响 / 练习场景）", run: () => setStudioTab("mixer") },
-    { id: "models", category: "设置", label: "打开本地 CoreML / ONNX 模型管理器", run: () => setShowModelModal(true) },
-    { id: "diagnostics", category: "设置", label: "打开系统诊断与环境自检（一键复制报告）", run: () => setShowDiagnosticsModal(true) },
-    { id: "projects", category: "文件", label: "打开本地扒带工程库（搜索 / 重命名 / 删除）", run: () => setShowProjectLibrary(true) },
-    { id: "batch", category: "工具", label: "打开多曲目批量分轨队列", shortcut: "Cmd+B", run: () => setShowBatchModal(true) },
+    { id: "demo", category: t("app.cat.start"), label: t("app.cmd.demo"), shortcut: "Cmd+D", run: handleLoadDemoSong },
+    { id: "open_audio", category: t("app.cat.file"), label: t("app.cmd.openAudio"), shortcut: "Cmd+O", run: handleOpenAudio },
+    { id: "import_midi", category: t("app.cat.file"), label: t("app.cmd.importMidi"), shortcut: "Cmd+I", run: handleImportMidi },
+    { id: "import_lrc", category: t("app.cat.file"), label: t("app.cmd.importLrc"), run: handleImportLrc },
+    { id: "export_srt", category: t("app.cat.export"), label: t("app.cmd.exportSrt"), disabled: lyrics.length === 0, run: handleExportSrt },
+    { id: "export_practice_csv", category: t("app.cat.export"), label: t("app.cmd.exportCsv"), disabled: practiceRecords.length === 0, run: handleExportPracticeCsv },
+    { id: "restore", category: t("app.cat.ai"), label: t("app.cmd.restore"), shortcut: "Cmd+R", disabled: !audioMeta, run: handleRestore },
+    { id: "auto_pipe", category: t("app.cat.ai"), label: t("app.cmd.autoPipe"), disabled: !audioMeta, run: handleSmartAutoPipeline },
+    { id: "stage", category: t("app.cat.stage"), label: t("app.cmd.stage"), shortcut: "F", disabled: !audioMeta, run: () => setStageModeOpen((v) => !v) },
+    { id: "setlist", category: t("app.cat.stage"), label: t("app.cmd.setlist"), shortcut: "Cmd+L", run: () => setShowSetlistModal(true) },
+    { id: "leadsheet", category: t("app.cat.export"), label: t("app.cmd.leadsheet"), shortcut: "Cmd+P", disabled: !audioMeta, run: () => setShowLeadSheetModal(true) },
+    { id: "share", category: t("app.cat.export"), label: t("app.cmd.share"), disabled: !audioMeta, run: () => setShowShareModal(true) },
+    { id: "bundle", category: t("app.cat.export"), label: t("app.cmd.bundle"), shortcut: "Cmd+Shift+E", disabled: !audioMeta, run: handleExportBundle },
+    { id: "midi2", category: t("app.cat.export"), label: t("app.cmd.midi2"), disabled: transposedNotes.length === 0 || chords.length === 0, run: handleExportMidiWithChords },
+    { id: "tab_falling", category: t("app.cat.view"), label: t("app.cmd.tabFalling"), run: () => setStudioTab("falling") },
+    { id: "tab_inst", category: t("app.cat.view"), label: t("app.cmd.tabInst"), run: () => setStudioTab("instrument") },
+    { id: "tab_coach", category: t("app.cat.view"), label: t("app.cmd.tabCoach"), run: () => setStudioTab("coach") },
+    { id: "tab_cover", category: t("app.cat.view"), label: t("app.cmd.tabCover"), run: () => setStudioTab("cover") },
+    { id: "tab_score", category: t("app.cat.view"), label: t("app.cmd.tabScore"), run: () => setStudioTab("score") },
+    { id: "tab_drums", category: t("app.cat.view"), label: t("app.cmd.tabDrums"), run: () => setStudioTab("drums") },
+    { id: "tab_lyrics", category: t("app.cat.view"), label: t("app.cmd.tabLyrics"), run: () => setStudioTab("lyrics") },
+    { id: "reharm_jazz", category: t("app.cat.chords"), label: t("app.cmd.reharmJazz"), disabled: chords.length === 0, run: () => handleReharmonize("jazz_neosoul") },
+    { id: "reharm_folk", category: t("app.cat.chords"), label: t("app.cmd.reharmFolk"), disabled: chords.length === 0, run: () => handleReharmonize("folk_open") },
+    { id: "usb_midi", category: t("app.cat.hw"), label: t("app.cmd.usbMidi"), run: handleConnectMidi },
+    { id: "theme", category: t("app.cat.look"), label: t("app.cmd.theme", { name: t(THEME_LABEL_KEYS[theme]) }), run: handleCycleTheme },
+    { id: "focus", category: t("app.cat.look"), label: aiPanelOpen ? t("app.cmd.hideAi") : t("app.cmd.showAi"), run: () => setAiPanelOpen((v) => !v) },
+    { id: "settings", category: t("app.cat.settings"), label: t("app.cmd.settings"), shortcut: "Cmd+,", run: () => openSettings("general") },
+    { id: "tab_chords", category: t("app.cat.view"), label: t("app.cmd.tabChords"), run: () => setStudioTab("chords") },
+    { id: "tab_mixer", category: t("app.cat.view"), label: t("app.cmd.tabMixer"), run: () => setStudioTab("mixer") },
+    { id: "models", category: t("app.cat.settings"), label: t("app.cmd.models"), run: () => setShowModelModal(true) },
+    { id: "diagnostics", category: t("app.cat.settings"), label: t("app.cmd.diagnostics"), run: () => setShowDiagnosticsModal(true) },
+    { id: "projects", category: t("app.cat.file"), label: t("app.cmd.projects"), run: () => setShowProjectLibrary(true) },
+    { id: "batch", category: t("app.cat.tools"), label: t("app.cmd.batch"), shortcut: "Cmd+B", run: () => setShowBatchModal(true) },
   ];
 
   const openEditor = (tab: StudioTab) => {
@@ -2128,7 +2134,7 @@ export const App: React.FC = () => {
   const arrangementTracks: ArrangementTrack[] = playableStems.map((st) => ({
     id: st.name,
     name: st.label_zh,
-    subtitle: st.name === "original" ? "未分轨 · 完整混音" : st.name,
+    subtitle: st.name === "original" ? t("app.mixFull") : st.name,
     color: STEM_COLORS[st.name] ?? "#38bdf8",
     peaks: st.waveform_peaks,
     isOriginal: st.name === "original",
@@ -2136,40 +2142,54 @@ export const App: React.FC = () => {
 
   const activeTabLabel = EDITOR_TAB_GROUPS.flatMap((g) => g.tabs).find(
     (t) => t.id === studioTab
-  )?.label;
+  )?.labelKey;
 
   const pipelineStep = autoPipelining ? statusMsg.match(/(\d)\/4/)?.[1] : null;
   const busyLabel = restoring
     ? restoreProgress
-      ? `修复中 · ${
-          (
-            {
-              analyze: "诊断",
-              stems: "分轨处理",
-              master: "母带",
-              limit: "限幅",
-              write: "写盘",
-              report: "报告",
-            } as Record<string, string>
-          )[restoreProgress.stage] ?? restoreProgress.stage
-        }`
-      : "修复中"
+      ? t("rp.progress", {
+          stage:
+            (
+              {
+                analyze: "rp.stage.analyze",
+                stems: "rp.stage.stems",
+                master: "rp.stage.master",
+                limit: "rp.stage.limit",
+                write: "rp.stage.write",
+                report: "rp.stage.report",
+              } as Record<string, string>
+            )[restoreProgress.stage]
+              ? t(
+                  (
+                    {
+                      analyze: "rp.stage.analyze",
+                      stems: "rp.stage.stems",
+                      master: "rp.stage.master",
+                      limit: "rp.stage.limit",
+                      write: "rp.stage.write",
+                      report: "rp.stage.report",
+                    } as Record<string, string>
+                  )[restoreProgress.stage] as I18nKey
+                )
+              : restoreProgress.stage,
+        })
+      : t("rp.restoring")
     : separating
-      ? "AI 分轨中"
+      ? t("app.busy.separating")
     : autoPipelining
       ? pipelineStep
-        ? `扒带 ${pipelineStep}/4`
-        : "一键扒带中"
+        ? t("app.busy.pipe", { n: pipelineStep })
+        : t("app.busy.piping")
       : transcribingStem
-        ? "转谱中"
+        ? t("app.busy.transcribing")
         : detectingChords || detectingStructure || detectingDrums
-          ? "分析中"
+          ? t("app.busy.analyzing")
           : extractingLyrics
-            ? "提取歌词中"
+            ? t("app.busy.lyrics")
             : loadingAudio
-              ? "分析音频中"
+              ? t("app.busy.audio")
               : llmLoading
-                ? "AI 分析中"
+                ? t("app.busy.llm")
                 : null;
 
   const editorTabCounts: Partial<Record<StudioTab, number>> = {
@@ -2187,7 +2207,7 @@ export const App: React.FC = () => {
         <div className="topbar-left" data-tauri-drag-region>
           <span className="brand" data-tauri-drag-region>StemScribe</span>
           <span className="song-title" data-tauri-drag-region title={audioMeta?.file_name}>
-            {audioMeta ? audioMeta.file_name : notes.length > 0 ? activeStemName || "MIDI 乐谱" : "未打开歌曲"}
+            {audioMeta ? audioMeta.file_name : notes.length > 0 ? activeStemName || t("app.midiScore") : t("app.noSong")}
           </span>
           {busyLabel && (
             <span className="task-pill">
@@ -2245,8 +2265,8 @@ export const App: React.FC = () => {
         />
 
         <div className="topbar-right">
-          <button className="btn" onClick={handleOpenAudio} title="导入音频文件 (⌘O)">
-            <FolderOpen size={14} /> 导入
+          <button className="btn" onClick={handleOpenAudio} title={t("app.importTip")}>
+            <FolderOpen size={14} /> {t("app.import")}
           </button>
           <button
             className="btn btn-primary"
@@ -2260,25 +2280,25 @@ export const App: React.FC = () => {
             onClick={() => handleRestore()}
             title={
               audioMeta && isDemoBlobPath(audioMeta.file_path)
-                ? "演示曲不支持修复，请导入自己的歌曲"
-                : "一键修复音质：分轨修复 + 母带处理 + 24-bit 导出"
+                ? t("app.msg.demoNoRestore")
+                : t("app.restoreTip")
             }
           >
-            <Sparkles size={14} /> {restoring ? "修复中..." : "一键修复"}
+            <Sparkles size={14} /> {restoring ? t("app.restoring") : t("app.oneClick")}
           </button>
           <button
             className="btn"
             disabled={!audioMeta || autoPipelining || separating || restoring}
             onClick={handleSmartAutoPipeline}
-            title="自动完成：AI 分 4 轨 → 识别和弦/调性/段落 → 鼓组 → 主旋律扒谱"
+            title={t("app.autoPipeTip")}
           >
-            <Wand2 size={14} /> {autoPipelining ? "扒带中..." : "一键扒带"}
+            <Wand2 size={14} /> {autoPipelining ? t("app.piping") : t("app.autoPipe")}
           </button>
           <div className="toolbar-divider" />
           <button
             className={`btn btn-icon ${aiPanelOpen ? "btn-active" : ""}`}
             onClick={() => setAiPanelOpen((v) => !v)}
-            title="AI 助手（编曲分析 / 智能修谱）"
+            title={t("app.aiTip")}
           >
             <Bot size={16} />
           </button>
@@ -2286,7 +2306,7 @@ export const App: React.FC = () => {
             <button
               className={`btn btn-icon ${showProjectsMenu ? "btn-active" : ""}`}
               onClick={() => setShowProjectsMenu((v) => !v)}
-              title="更多工具：工程库、歌单、导出、模型管理等"
+              title={t("app.moreTip")}
             >
               <MoreHorizontal size={16} />
             </button>
@@ -2296,23 +2316,23 @@ export const App: React.FC = () => {
                 <div className="menu-pop">
                   {(
                     [
-                      { icon: <Save size={14} />, label: "保存工程", hint: "⌘S", disabled: !audioMeta, onClick: handleSaveProject },
-                      { icon: <FolderOpen size={14} />, label: `工程库 (${recentProjects.length})`, hint: "", onClick: () => setShowProjectLibrary(true) },
-                      { icon: <Music size={14} />, label: "导入 MIDI 文件", hint: "⌘I", onClick: handleImportMidi },
+                      { icon: <Save size={14} />, label: t("app.menu.save"), hint: "⌘S", disabled: !audioMeta, onClick: handleSaveProject },
+                      { icon: <FolderOpen size={14} />, label: t("app.menu.library", { n: recentProjects.length }), hint: "", onClick: () => setShowProjectLibrary(true) },
+                      { icon: <Music size={14} />, label: t("app.menu.importMidi"), hint: "⌘I", onClick: handleImportMidi },
                       null,
-                      { icon: <Layers size={14} />, label: separating ? "AI 分轨中..." : "仅 AI 分轨（不扒谱）", hint: "", disabled: !audioMeta || separating || autoPipelining || stems.length > 0, onClick: handleSeparateStems },
-                      { icon: <ListOrdered size={14} />, label: `演出歌单 (${setlists.length})`, hint: "⌘L", onClick: () => setShowSetlistModal(true) },
-                      { icon: <ListMusic size={14} />, label: "批量处理", hint: "⌘B", onClick: () => setShowBatchModal(true) },
+                      { icon: <Layers size={14} />, label: separating ? t("app.busy.separating") : t("app.menu.separateOnly"), hint: "", disabled: !audioMeta || separating || autoPipelining || stems.length > 0, onClick: handleSeparateStems },
+                      { icon: <ListOrdered size={14} />, label: t("app.menu.setlist", { n: setlists.length }), hint: "⌘L", onClick: () => setShowSetlistModal(true) },
+                      { icon: <ListMusic size={14} />, label: t("app.menu.batch"), hint: "⌘B", onClick: () => setShowBatchModal(true) },
                       null,
-                      { icon: <FileText size={14} />, label: "弹唱谱排版 / 打印", hint: "⌘P", disabled: !audioMeta, onClick: () => setShowLeadSheetModal(true) },
-                      { icon: <Maximize2 size={14} />, label: "演出提词器", hint: "F", disabled: !audioMeta, onClick: () => setStageModeOpen(true) },
-                      { icon: <Share2 size={14} />, label: "导出分享图", hint: "", disabled: !audioMeta, onClick: () => setShowShareModal(true) },
-                      { icon: <Package size={14} />, label: "导出练习资料包", hint: "", disabled: !audioMeta, onClick: handleExportBundle },
-                      { icon: <Download size={14} />, label: "导出混音 WAV", hint: "", disabled: stems.length === 0, onClick: handleExportMixedWav },
-                      { icon: <Download size={14} />, label: "导出循环区 WAV", hint: "", disabled: !audioMeta || loopB <= loopA + 0.05, onClick: handleExportLoopSlice },
+                      { icon: <FileText size={14} />, label: t("app.menu.leadsheet"), hint: "⌘P", disabled: !audioMeta, onClick: () => setShowLeadSheetModal(true) },
+                      { icon: <Maximize2 size={14} />, label: t("app.menu.stage"), hint: "F", disabled: !audioMeta, onClick: () => setStageModeOpen(true) },
+                      { icon: <Share2 size={14} />, label: t("app.menu.share"), hint: "", disabled: !audioMeta, onClick: () => setShowShareModal(true) },
+                      { icon: <Package size={14} />, label: t("app.menu.bundle"), hint: "", disabled: !audioMeta, onClick: handleExportBundle },
+                      { icon: <Download size={14} />, label: t("app.menu.mix"), hint: "", disabled: stems.length === 0, onClick: handleExportMixedWav },
+                      { icon: <Download size={14} />, label: t("app.menu.loop"), hint: "", disabled: !audioMeta || loopB <= loopA + 0.05, onClick: handleExportLoopSlice },
                       null,
-                      { icon: <Search size={14} />, label: "命令面板", hint: "⌘K", onClick: () => setShowCommandPalette(true) },
-                      { icon: <HelpCircle size={14} />, label: "快捷键", hint: "?", onClick: () => setShowShortcutsModal(true) },
+                      { icon: <Search size={14} />, label: t("app.menu.palette"), hint: "⌘K", onClick: () => setShowCommandPalette(true) },
+                      { icon: <HelpCircle size={14} />, label: t("app.menu.shortcuts"), hint: "?", onClick: () => setShowShortcutsModal(true) },
                     ] as Array<{ icon: React.ReactNode; label: string; hint: string; disabled?: boolean; onClick: () => void } | null>
                   ).map((item, idx) =>
                     item === null ? (
@@ -2336,12 +2356,12 @@ export const App: React.FC = () => {
                   {recentProjects.length > 0 && (
                     <>
                       <div className="menu-sep" />
-                      <div className="menu-heading">最近工程</div>
+                      <div className="menu-heading">{t("app.recent")}</div>
                       {recentProjects.slice(0, 5).map((p) => (
                         <button key={p.id} className="menu-item" onClick={() => handleLoadProject(p.id)}>
                           <History size={14} />
                           <span className="menu-label">{p.name}</span>
-                          <span className="menu-hint">{p.note_count} 音符</span>
+                          <span className="menu-hint">{t("score.notes", { n: p.note_count })}</span>
                         </button>
                       ))}
                     </>
@@ -2351,7 +2371,7 @@ export const App: React.FC = () => {
             )}
           </div>
 
-          <button className="btn btn-icon" onClick={() => openSettings("general")} title="设置 (⌘,)">
+          <button className="btn btn-icon" onClick={() => openSettings("general")} title={t("app.settingsTip")}>
             <Settings size={16} />
           </button>
         </div>
@@ -2401,13 +2421,13 @@ export const App: React.FC = () => {
                 label: sg.label,
               }));
               setMarkers(converted);
-              setStatusMsg(`已将 ${converted.length} 个段落转为书签。`);
+              setStatusMsg(t("app.msg.segsToMarkers", { n: converted.length }));
             }}
             onDetectChords={handleDetectChords}
             onOpenChordEditor={() => openEditor("chords")}
             onAddMarker={() => {
               const seg = structure.find((sg) => currentTime >= sg.start_sec && currentTime < sg.end_sec);
-              handleAddMarker(seg?.label ?? `书签 ${markers.length + 1}`, currentTime);
+              handleAddMarker(seg?.label ?? t("app.bookmarkN", { n: markers.length + 1 }), currentTime);
             }}
             onDeleteMarker={(id) => setMarkers((prev) => prev.filter((m) => m.id !== id))}
             onOpenMidiEditor={() => openEditor("score")}
@@ -2416,31 +2436,31 @@ export const App: React.FC = () => {
                 <div className="empty-icon">
                   <Music size={26} />
                 </div>
-                <h2>导入一首 AI 歌，一键修复音质</h2>
-                <p>分轨修复 · 母带 · 24-bit 导出，全部在本机完成。</p>
+                <h2>{t("app.heroTitle")}</h2>
+                <p>{t("app.heroSub")}</p>
                 <div className="empty-actions">
                   <button className="btn btn-primary btn-lg" onClick={handleOpenAudio}>
-                    <FolderOpen size={16} /> 导入音频
+                    <FolderOpen size={16} /> {t("app.heroImport")}
                   </button>
                   <button className="btn btn-lg" onClick={handleLoadDemoSong}>
-                    <Sparkles size={16} /> 试试演示曲
+                    <Sparkles size={16} /> {t("app.heroDemo")}
                   </button>
                   <button className="btn btn-lg" onClick={handleImportStems}>
-                    <Music size={16} /> 导入分轨（Suno 等）
+                    <Music size={16} /> {t("app.heroStems")}
                   </button>
                   <button className="btn btn-lg" onClick={handleImportMidi}>
-                    <Music size={16} /> 导入 MIDI
+                    <Music size={16} /> {t("app.heroMidi")}
                   </button>
                 </div>
                 <ol className="empty-steps">
                   <li>
-                    <b>1</b>导入歌曲
+                    <b>1</b>{t("app.step1")}
                   </li>
                   <li>
-                    <b>2</b>一键修复
+                    <b>2</b>{t("app.step2")}
                   </li>
                   <li>
-                    <b>3</b>对比试听并导出
+                    <b>3</b>{t("app.step3")}
                   </li>
                 </ol>
               </div>
@@ -2449,19 +2469,19 @@ export const App: React.FC = () => {
 
           {(audioMeta || notes.length > 0) && (
           <div className={`editor ${editorOpen ? "" : "collapsed"}`} style={editorOpen ? { height: editorHeight } : undefined}>
-            {editorOpen && <div className="editor-resize" onMouseDown={startEditorResize} title="拖动调整高度" />}
+            {editorOpen && <div className="editor-resize" onMouseDown={startEditorResize} title={t("app.resizeTip")} />}
             <div className="editor-tabs">
               {EDITOR_TAB_GROUPS.map((group) => (
-                <div key={group.label} className="editor-tab-group">
-                  <span className="editor-group-label">{group.label}</span>
-                  {group.tabs.map((t) => (
+                <div key={group.labelKey} className="editor-tab-group">
+                  <span className="editor-group-label">{t(group.labelKey)}</span>
+                  {group.tabs.map((tab) => (
                     <button
-                      key={t.id}
-                      className={`editor-tab ${editorOpen && studioTab === t.id ? "on" : ""}`}
-                      onClick={() => openEditor(t.id)}
+                      key={tab.id}
+                      className={`editor-tab ${editorOpen && studioTab === tab.id ? "on" : ""}`}
+                      onClick={() => openEditor(tab.id)}
                     >
-                      {t.label}
-                      {editorTabCounts[t.id] ? <span className="editor-count">{editorTabCounts[t.id]}</span> : null}
+                      {t(tab.labelKey)}
+                      {editorTabCounts[tab.id] ? <span className="editor-count">{editorTabCounts[tab.id]}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -2469,14 +2489,14 @@ export const App: React.FC = () => {
               <button
                 className="icon-btn editor-toggle"
                 onClick={() => setEditorOpen((v) => !v)}
-                title={editorOpen ? "收起编辑器" : "展开编辑器"}
+                title={editorOpen ? t("app.collapse") : t("app.expand")}
               >
                 {editorOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
               </button>
             </div>
             {editorOpen && (
               <div className="editor-body">
-            <ErrorBoundary compact resetKey={studioTab} label={activeTabLabel}>
+            <ErrorBoundary compact resetKey={studioTab} label={activeTabLabel ? t(activeTabLabel) : ""}>
           {studioTab === "restore" && (
             <RestorePanel
               before={qualityBefore}
@@ -2591,9 +2611,9 @@ export const App: React.FC = () => {
                 try {
                   const updated = await deleteRecordedTake(fileName);
                   setArchivedTakes(updated);
-                  setStatusMsg(`已从磁盘删除归档 Take：${fileName}`);
+                  setStatusMsg(t("app.msg.takeDeleted", { name: fileName }));
                 } catch (err) {
-                  setStatusMsg(`删除归档失败: ${String(err)}`);
+                  setStatusMsg(t("app.msg.takeDeleteFail", { err: String(err) }));
                 }
               }}
               onBounceCoverWav={handleBounceCoverWav}
@@ -2660,7 +2680,7 @@ export const App: React.FC = () => {
           {studioTab === "chords" && (
             <div className="chord-editor">
               <div className="reharm-row">
-                <span className="reharm-title">风格重配</span>
+                <span className="reharm-title">{t("app.reharmTitle")}</span>
                 {REHARM_STYLES.map((st) => (
                   <button
                     key={st.id}
@@ -2668,12 +2688,12 @@ export const App: React.FC = () => {
                     disabled={chords.length === 0}
                     onClick={() => handleReharmonize(st.id)}
                   >
-                    {st.label}
+                    {t(st.labelKey)}
                   </button>
                 ))}
                 {originalChordsBackup && (
                   <button className="btn btn-sm" onClick={handleRestoreOriginalChords}>
-                    还原原版
+                    {t("app.revertOriginal")}
                   </button>
                 )}
               </div>
@@ -2729,14 +2749,14 @@ export const App: React.FC = () => {
           <aside className="inspector">
             <div className="inspector-header">
               <span>
-                <Bot size={14} /> AI 助手
+                <Bot size={14} /> {t("app.aiPanel")}
               </span>
-              <button className="icon-btn" onClick={() => setAiPanelOpen(false)} title="关闭">
+              <button className="icon-btn" onClick={() => setAiPanelOpen(false)} title={t("app.close")}>
                 <ChevronDown size={14} style={{ transform: "rotate(-90deg)" }} />
               </button>
             </div>
             <div className="inspector-body">
-              <ErrorBoundary compact label="AI 助手">
+              <ErrorBoundary compact label={t("app.aiPanel")}>
               <AiAssistantPanel
                 configured={Boolean(relayConfig.base_url.trim() && relayConfig.api_key.trim())}
                 onOpenSettings={() => openSettings("ai")}
@@ -2771,7 +2791,7 @@ export const App: React.FC = () => {
         initialSection={settingsSection}
         appVersion={__APP_VERSION__}
         theme={theme}
-        themeLabels={THEME_LABELS}
+        themeLabels={{ dark: t(THEME_LABEL_KEYS.dark), midnight: t(THEME_LABEL_KEYS.midnight), light: t(THEME_LABEL_KEYS.light) }}
         relayConfig={relayConfig}
         modelStatus={modelStatus}
         highQualitySep={highQualitySep}
