@@ -30,7 +30,7 @@ export function translateIssue(iss: BackendIssue): BackendIssue {
     return { ...iss, title: t("be.mono.title"), detail: t("be.mono.detail") };
   }
   if (iss.id === "low_band_corr") {
-    const c = iss.detail.match(/相关性\s*([\d.]+)/)?.[1] ?? "";
+    const c = iss.detail.match(/相关性\s*([+-]?[\d.]+)/)?.[1] ?? "";
     return { ...iss, title: t("be.lowCorr.title"), detail: t("be.lowCorr.detail", { corr: c }) };
   }
   if (iss.id === "clipping") {
