@@ -1,0 +1,14 @@
+{
+  "clips": {
+    "a_resonance_quiet": {
+      "time_s": 8.183992791
+    },
+    "b_dark_muddy": {
+      "time_s": 8.784625375
+    },
+    "c_clipped_flat": {
+      "time_s": 7.990363459
+    }
+  },
+  "machine": "aarch64"
+}
