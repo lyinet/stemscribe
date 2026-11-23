@@ -1,0 +1,45 @@
+name: Bench — performance & quality regression
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Bench (macOS Apple Silicon)
+    runs-on: macos-14
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Rust stable (aarch64-apple-darwin)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-directories: ~/Library/Caches/ort.pyke.io
+
+      - name: Build & run bench (gates enforced)
+        run: bash scripts/bench/run.sh
+
+      - name: Upload bench results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: bench-results-${{ github.run_number }}
+          retention-days: 30
+          path: |
+            bench-results.json
+            bench-summary.md

@@ -12,6 +12,7 @@
     "tauri": "tauri",
     "build:mac": "tauri build --target aarch64-apple-darwin",
     "verify": "python3 scripts/verify_project.py || python scripts/verify_project.py",
+    "bench": "bash scripts/bench/run.sh",
     "check": "npm run verify && npm run build && cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {
