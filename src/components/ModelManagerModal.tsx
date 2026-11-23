@@ -114,7 +114,7 @@ export const ModelManagerModal: React.FC<Props> = ({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 100,
+        zIndex: 140,
       }}
     >
       <div className="card" style={{ width: 650, maxWidth: "92vw" }}>
